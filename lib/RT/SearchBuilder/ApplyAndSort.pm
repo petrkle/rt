@@ -45,73 +45,50 @@
 # those contributions and any derivatives thereof.
 #
 # END BPS TAGGED BLOCK }}}
+
 use strict;
 use warnings;
 
-package RT::ObjectCustomFields;
-use base 'RT::SearchBuilder::ApplyAndSort';
+package RT::SearchBuilder::ApplyAndSort;
+use base 'RT::SearchBuilder';
 
-use RT::CustomField;
-use RT::ObjectCustomField;
-
-sub Table { 'ObjectCustomFields'}
-
-sub LimitToCustomField {
-    my $self = shift;
-    my $id = shift;
-    $self->Limit( FIELD => 'CustomField', VALUE => $id );
+sub RecordClass {
+    my $class = ref($_[0]) || $_[0];
+    $class =~ s/s$// or return undef;
+    return $class;
 }
 
-sub LimitToLookupType {
+sub _Init {
     my $self = shift;
-    my $lookup = shift;
 
-    $self->{'_cfs_alias'} ||= $self->Join(
-        ALIAS1 => 'main',
-        FIELD1 => 'CustomField',
-        TABLE2 => 'CustomFields',
-        FIELD2 => 'id',
+    # By default, order by SortOrder
+    $self->OrderByCols(
+         { ALIAS => 'main',
+           FIELD => 'SortOrder',
+           ORDER => 'ASC' },
+         { ALIAS => 'main',
+           FIELD => 'id',
+           ORDER => 'ASC' },
     );
-    $self->Limit(
-        ALIAS    => $self->{'_cfs_alias'},
-        FIELD    => 'LookupType',
-        OPERATOR => '=',
-        VALUE    => $lookup,
-    );
+
+    return $self->SUPER::_Init(@_);
 }
 
-sub HasEntryForCustomField {
+sub LimitToObjectId {
     my $self = shift;
-    my $id = shift;
-
-    my @items = grep {$_->CustomField == $id } @{$self->ItemsArrayRef};
-
-    if ($#items > 1) {
-	die "$self HasEntry had a list with more than one of $id in it. this can never happen";
-    }
-    if ($#items == -1 ) {
-	return undef;
-    }
-    else {
-	return ($items[0]);
-    }  
+    my $id = shift || 0;
+    $self->Limit( FIELD => 'ObjectId', VALUE => $id );
 }
 
-sub CustomFields {
-    my $self = shift;
-    my %seen;
-    map { $_->CustomFieldObj } @{$self->ItemsArrayRef};
-}
+=head2 NewItem
 
-sub _DoSearch {
+Returns an empty new collection's item
+
+=cut
+
+sub NewItem {
     my $self = shift;
-    if ($self->{'_cfs_alias'}) {
-    $self->Limit( ALIAS           => $self->{'_cfs_alias'},
-                 FIELD           => 'Disabled',
-                 OPERATOR        => '!=',
-                 VALUE           =>  1);
-    }
-    $self->SUPER::_DoSearch()
+    return $self->RecordClass->new( $self->CurrentUser );
 }
 
 RT::Base->_ImportOverlays();
