@@ -1160,9 +1160,7 @@ sub SetLookupType {
     my $lookup = shift;
     if ( $lookup ne $self->LookupType ) {
         # Okay... We need to invalidate our existing relationships
-        my $ObjectCustomFields = RT::ObjectCustomFields->new($self->CurrentUser);
-        $ObjectCustomFields->LimitToCustomField($self->Id);
-        $_->Delete foreach @{$ObjectCustomFields->ItemsArrayRef};
+        RT::ObjectCustomField->new($self->CurrentUser)->DeleteAll( CustomField => $self );
     }
     return $self->_Set(Field => 'LookupType', Value =>$lookup);
 }
@@ -1360,7 +1358,6 @@ Takes an object
 
 =cut
 
-
 sub AddToObject {
     my $self  = shift;
     my $object = shift;
@@ -1374,26 +1371,9 @@ sub AddToObject {
         return ( 0, $self->loc('Permission Denied') );
     }
 
-    if ( $self->IsApplied( $id ) ) {
-        return ( 0, $self->loc("Custom field is already applied to the object") );
-    }
-
-    if ( $id ) {
-        # applying locally
-        return (0, $self->loc("Couldn't apply custom field to an object as it's global already") )
-            if $self->IsApplied( 0 );
-    }
-    else {
-        my $applied = RT::ObjectCustomFields->new( $self->CurrentUser );
-        $applied->LimitToCustomField( $self->id );
-        while ( my $record = $applied->Next ) {
-            $record->Delete;
-        }
-    }
-
     my $ocf = RT::ObjectCustomField->new( $self->CurrentUser );
-    my ( $oid, $msg ) = $ocf->Create(
-        ObjectId => $id, CustomField => $self->id,
+    my ( $oid, $msg ) = $ocf->Apply(
+        CustomField => $self->id, ObjectId => $id,
     );
     return ( $oid, $msg );
 }

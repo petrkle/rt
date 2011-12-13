@@ -98,6 +98,46 @@ sub Create {
     );
 }
 
+sub Apply {
+    my $self = shift;
+    my %args = (@_);
+
+    my $field = $self->TargetField;
+
+    my $tid = $args{ $field };
+    $tid = $tid->id if ref $tid;
+    $tid ||= $self->TargetObj->id;
+
+    my $oid = $args{'ObjectId'};
+    $oid = $oid->id if ref $oid;
+    $oid ||= 0;
+
+    if ( $self->IsApplied( $tid => $oid ) ) {
+        return ( 0, $self->loc("Is already applied to the object") );
+    }
+
+    if ( $oid ) {
+        # applying locally
+        return (0, $self->loc("Couldn't apply as it's global already") )
+            if $self->IsApplied( $tid => 0 );
+    }
+    else {
+        $self->DeleteAll( $field => $tid );
+    }
+
+    return $self->Create(
+        $field => $tid, ObjectId => $oid,
+    );
+}
+
+sub IsApplied {
+    my $self = shift;
+    my ($tid, $oid) = @_;
+    my $record = $self->new( $self->CurrentUser );
+    $record->LoadByCols( $self->TargetField => $tid, ObjectId => $oid );
+    return $record->id;
+}
+
 sub Delete {
     my $self = shift;
 
@@ -112,6 +152,21 @@ sub Delete {
     }
 
     $self->SUPER::Delete;
+}
+
+sub DeleteAll {
+    my $self = shift;
+    my %args = (@_);
+
+    my $field = $self->TargetField;
+
+    my $id = $args{ $field };
+    $id = $id->id if ref $id;
+    $id ||= $self->TargetObj->id;
+
+    my $list = $self->CollectionClass->new( $self->CurrentUser );
+    $list->Limit( FIELD => $field, VALUE => $id );
+    $_->Delete foreach @{ $list->ItemsArrayRef };
 }
 
 sub SetDisabledOnAll {
