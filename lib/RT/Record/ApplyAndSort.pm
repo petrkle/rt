@@ -56,6 +56,8 @@ sub CollectionClass {
     return (ref($_[0]) || $_[0]).'s';
 }
 
+sub ObjectCollectionClass { die "should be subclassed" }
+
 sub TargetField {
     my $class = ref($_[0]) || $_[0];
     $class =~ s/.*::Object// or return undef;
@@ -136,6 +138,90 @@ sub IsApplied {
     my $record = $self->new( $self->CurrentUser );
     $record->LoadByCols( $self->TargetField => $tid, ObjectId => $oid );
     return $record->id;
+}
+
+=head1 AppliedTo
+
+Returns collection with objects this custom field is applied to.
+Class of the collection depends on L</LookupType>.
+See all L</NotAppliedTo> .
+
+Doesn't takes into account if object is applied globally.
+
+=cut
+
+sub AppliedTo {
+    my $self = shift;
+
+    my ($res, $alias) = $self->_AppliedTo( @_ );
+    return $res unless $res;
+
+    $res->Limit(
+        ALIAS     => $alias,
+        FIELD     => 'id',
+        OPERATOR  => 'IS NOT',
+        VALUE     => 'NULL',
+    );
+
+    return $res;
+}
+
+=head1 NotAppliedTo
+
+Returns collection with objects this custom field is not applied to.
+Class of the collection depends on L</LookupType>.
+See all L</AppliedTo> .
+
+Doesn't takes into account if object is applied globally.
+
+=cut
+
+sub NotAppliedTo {
+    my $self = shift;
+
+    my ($res, $alias) = $self->_AppliedTo( @_ );
+    return $res unless $res;
+
+    $res->Limit(
+        ALIAS     => $alias,
+        FIELD     => 'id',
+        OPERATOR  => 'IS',
+        VALUE     => 'NULL',
+    );
+
+    return $res;
+}
+
+sub _AppliedTo {
+    my $self = shift;
+    my %args = (@_);
+
+    my $field = $self->TargetField;
+    my $target = $args{ $field } || $self->TargetObj;
+
+    my ($class) = $self->ObjectCollectionClass( $field => $target );
+    return undef unless $class;
+
+    my $res = $class->new( $self->CurrentUser );
+
+    # If target applied to a Group, only display user-defined groups
+    $res->LimitToUserDefinedGroups if $class eq 'RT::Groups';
+
+    $res->OrderBy( FIELD => 'Name' );
+    my $alias = $res->Join(
+        TYPE   => 'LEFT',
+        ALIAS1 => 'main',
+        FIELD1 => 'id',
+        TABLE2 => $self->Table,
+        FIELD2 => 'ObjectId',
+    );
+    $res->Limit(
+        LEFTJOIN => $alias,
+        ALIAS    => $alias,
+        FIELD    => $field,
+        VALUE    => $target->id,
+    );
+    return ($res, $alias);
 }
 
 sub Delete {

@@ -56,6 +56,12 @@ use RT::ObjectCustomFields;
 
 sub Table {'ObjectCustomFields'}
 
+sub ObjectCollectionClass {
+    my $self = shift;
+    my %args = (@_);
+    return $args{'CustomField'}->CollectionClassFromLookupType;
+}
+
 # XXX: Where is ACL check when we create a record?
 
 =head2 CustomFieldObj

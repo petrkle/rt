@@ -1263,18 +1263,8 @@ Doesn't takes into account if object is applied globally.
 
 sub AppliedTo {
     my $self = shift;
-
-    my ($res, $ocfs_alias) = $self->_AppliedTo;
-    return $res unless $res;
-
-    $res->Limit(
-        ALIAS     => $ocfs_alias,
-        FIELD     => 'id',
-        OPERATOR  => 'IS NOT',
-        VALUE     => 'NULL',
-    );
-
-    return $res;
+    return RT::ObjectCustomField->new( $self->CurrentUser )
+        ->AppliedTo( CustomField => $self );
 }
 
 =head1 NotAppliedTo
@@ -1289,48 +1279,8 @@ Doesn't takes into account if object is applied globally.
 
 sub NotAppliedTo {
     my $self = shift;
-
-    my ($res, $ocfs_alias) = $self->_AppliedTo;
-    return $res unless $res;
-
-    $res->Limit(
-        ALIAS     => $ocfs_alias,
-        FIELD     => 'id',
-        OPERATOR  => 'IS',
-        VALUE     => 'NULL',
-    );
-
-    return $res;
-}
-
-sub _AppliedTo {
-    my $self = shift;
-
-    my ($class) = $self->CollectionClassFromLookupType;
-    return undef unless $class;
-
-    my $res = $class->new( $self->CurrentUser );
-
-    # If CF is a Group CF, only display user-defined groups
-    if ( $class eq 'RT::Groups' ) {
-        $res->LimitToUserDefinedGroups;
-    }
-
-    $res->OrderBy( FIELD => 'Name' );
-    my $ocfs_alias = $res->Join(
-        TYPE   => 'LEFT',
-        ALIAS1 => 'main',
-        FIELD1 => 'id',
-        TABLE2 => 'ObjectCustomFields',
-        FIELD2 => 'ObjectId',
-    );
-    $res->Limit(
-        LEFTJOIN => $ocfs_alias,
-        ALIAS    => $ocfs_alias,
-        FIELD    => 'CustomField',
-        VALUE    => $self->id,
-    );
-    return ($res, $ocfs_alias);
+    return RT::ObjectCustomField->new( $self->CurrentUser )
+        ->NotAppliedTo( CustomField => $self );
 }
 
 =head2 IsApplied
