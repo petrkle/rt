@@ -242,6 +242,21 @@ CREATE TABLE Scrips (
 );
 
 
+CREATE SEQUENCE objectscrips_id_seq;
+
+CREATE TABLE ObjectScrips (
+  id INTEGER DEFAULT nextval('objectscrips_id_seq'),
+  Scrip integer NOT NULL,
+  ObjectId integer NOT NULL,
+  SortOrder integer NOT NULL DEFAULT 0  ,
+
+  Creator integer NOT NULL DEFAULT 0  ,
+  Created TIMESTAMP NULL  ,
+  LastUpdatedBy integer NOT NULL DEFAULT 0  ,
+  LastUpdated TIMESTAMP NULL  ,
+  PRIMARY KEY (id)
+
+);
 
 
 
