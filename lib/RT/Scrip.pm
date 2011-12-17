@@ -73,6 +73,9 @@ use RT::Queue;
 use RT::Template;
 use RT::ScripCondition;
 use RT::ScripAction;
+use RT::Scrips;
+use RT::ObjectScrip;
+
 use base 'RT::Record';
 
 sub Table {'Scrips'}
@@ -179,12 +182,15 @@ sub Create {
         CustomCommitCode       => $args{'CustomCommitCode'},
         CustomIsApplicableCode => $args{'CustomIsApplicableCode'},
     );
-    if ( $id ) {
-        return ( $id, $self->loc('Scrip Created') );
+    return ( $id, $msg ) unless $id;
+
+    unless ( $args{'Stage'} eq 'Disabled' ) {
+        my ($status, $msg) = RT::ObjectScrip->new( $self->CurrentUser )
+            ->Apply( Scrip => $self, ObjectId => $args{'Queue'} );
+        $RT::Logger->error( "Couldn't apply scrip: $msg" ) unless $status;
     }
-    else {
-        return ( $id, $msg );
-    }
+
+    return ( $id, $self->loc('Scrip Created') );
 }
 
 
@@ -205,15 +211,42 @@ sub Delete {
     return ( $self->SUPER::Delete(@_) );
 }
 
-
-
-
-sub QueueObj {
+sub IsAdded {
     my $self = shift;
-
+    my $record = RT::ObjectScrip->new( $self->CurrentUser );
+    $record->LoadByCols( Scrip => $self->id, ObjectId => shift || 0 );
+    return $record->id;
 }
 
+sub AddedTo {
+    my $self = shift;
+    return RT::ObjectScrip->new( $self->CurrentUser )
+        ->AppliedTo( Scrip => $self );
+}
 
+sub NotAddedTo {
+    my $self = shift;
+    return RT::ObjectScrip->new( $self->CurrentUser )
+        ->NotAppliedTo( Scrip => $self );
+}
+
+sub AddToObject {
+    my $self = shift;
+    my $object = shift;
+
+    my $rec = RT::ObjectScrip->new( $self->CurrentUser );
+    return $rec->Apply( Scrip => $self, ObjectId => $object );
+}
+
+sub RemoveFromObject {
+    my $self = shift;
+    my $object = shift;
+
+    my $rec = RT::ObjectScrip->new( $self->CurrentUser );
+    $rec->LoadByCols( Scrip => $self->id, ObjectId => $object );
+    return (0, $self->loc('Scrip is not applied') ) unless $rec->id;
+    return $rec->Delete;
+}
 
 =head2 ActionObj
 
@@ -577,18 +610,20 @@ sub HasRight {
                  Principal => undef,
                  @_ );
 
-    if ( $self->SUPER::_Value('Queue') ) {
-        return $args{'Principal'}->HasRight(
+    my $queues = $self->AddedTo;
+    my $found = 0;
+    while ( my $queue = $queues->Next ) {
+        return 1 if $args{'Principal'}->HasRight(
             Right  => $args{'Right'},
-            Object => $self->QueueObj
+            Object => $queue,
         );
+        $found = 1;
     }
-    else {
-        return $args{'Principal'}->HasRight(
-            Object => $RT::System,
-            Right  => $args{'Right'},
-        );
-    }
+    return $args{'Principal'}->HasRight(
+        Object => $RT::System,
+        Right  => $args{'Right'},
+    ) unless $found;
+    return 0;
 }
 
 
