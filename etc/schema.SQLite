@@ -151,7 +151,6 @@ CREATE TABLE Scrips (
   CustomPrepareCode text NULL  ,
   CustomCommitCode text NULL  ,
   Stage varchar(32) NULL  ,
-  Queue integer NULL DEFAULT 0 ,
   Template integer NULL DEFAULT 0 ,
   Creator integer NULL DEFAULT 0 ,
   Created DATETIME NULL  ,

@@ -170,7 +170,6 @@ sub Create {
         unless $condition->Id;
 
     my ( $id, $msg ) = $self->SUPER::Create(
-        Queue                  => $args{'Queue'},
         Template               => $template->Id,
         ScripCondition         => $condition->id,
         Stage                  => $args{'Stage'},
@@ -208,21 +207,10 @@ sub Delete {
 
 
 
-=head2 QueueObj
-
-Retuns an RT::Queue object with this Scrip's queue
-
-=cut
 
 sub QueueObj {
     my $self = shift;
 
-    if ( !$self->{'QueueObj'} ) {
-        require RT::Queue;
-        $self->{'QueueObj'} = RT::Queue->new( $self->CurrentUser );
-        $self->{'QueueObj'}->Load( $self->__Value('Queue') );
-    }
-    return ( $self->{'QueueObj'} );
 }
 
 
@@ -504,8 +492,7 @@ sub _Set {
     );
 
     unless ( $self->CurrentUserHasRight('ModifyScrips') ) {
-        $RT::Logger->debug(
-                 "CurrentUser can't modify Scrips for " . $self->Queue . "\n" );
+        $RT::Logger->debug( "CurrentUser can't modify Scrips" );
         return ( 0, $self->loc('Permission Denied') );
     }
 
@@ -550,9 +537,7 @@ sub _Value {
     my $self = shift;
 
     unless ( $self->CurrentUserHasRight('ShowScrips') ) {
-        $RT::Logger->debug( "CurrentUser can't modify Scrips for "
-                            . $self->__Value('Queue')
-                            . "\n" );
+        $RT::Logger->debug( "CurrentUser can't see scrip #". $self->__Value('id') );
         return (undef);
     }
 
@@ -904,24 +889,6 @@ Returns (1, 'Status message') on success and (0, 'Error Message') on failure.
 =cut
 
 
-=head2 Queue
-
-Returns the current value of Queue.
-(In the database, Queue is stored as int(11).)
-
-
-
-=head2 SetQueue VALUE
-
-
-Set Queue to VALUE.
-Returns (1, 'Status message') on success and (0, 'Error Message') on failure.
-(In the database, Queue will be stored as a int(11).)
-
-
-=cut
-
-
 =head2 Template
 
 Returns the current value of Template.
@@ -1000,8 +967,6 @@ sub _CoreAccessible {
 		{read => 1, write => 1, sql_type => -4, length => 0,  is_blob => 1,  is_numeric => 0,  type => 'text', default => ''},
         Stage =>
 		{read => 1, write => 1, sql_type => 12, length => 32,  is_blob => 0,  is_numeric => 0,  type => 'varchar(32)', default => ''},
-        Queue =>
-		{read => 1, write => 1, sql_type => 4, length => 11,  is_blob => 0,  is_numeric => 1,  type => 'int(11)', default => '0'},
         Template =>
 		{read => 1, write => 1, sql_type => 4, length => 11,  is_blob => 0,  is_numeric => 1,  type => 'int(11)', default => '0'},
         Creator =>

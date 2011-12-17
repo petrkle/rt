@@ -142,7 +142,6 @@ CREATE TABLE Scrips (
 	CustomPrepareCode	CLOB,
 	CustomCommitCode	CLOB,
 	Stage		VARCHAR2(32),
-	Queue		NUMBER(11,0) DEFAULT 0 NOT NULL,
 	Template	NUMBER(11,0) DEFAULT 0 NOT NULL,
   	Creator 	NUMBER(11,0) DEFAULT 0 NOT NULL,
   	Created 	DATE,
