@@ -98,6 +98,20 @@ my $COLUMN_MAP = {
 	attribute => 'Stage',
 	value     => sub { return $_[0]->Stage() },
     },
+
+    AdminURL => {
+	value     => sub {
+            my $queue = $_[0]->AddedTo->First;
+            my $res = 'Admin';
+            if ( $queue ) {
+                $res .= '/Queues/Scrip.html?Queue='. $queue->id .'&';
+            } else {
+                $res .= '/Global/Scrip.html?';
+            }
+            $res .= 'id='. $_[0]->id;
+            return $res;
+        },
+    },
 };
 
 </%ONCE>
