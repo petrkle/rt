@@ -383,7 +383,6 @@ sub Create {
         BasedOn     => $args{'BasedOn'},
         ValuesClass => $args{'ValuesClass'},
         Description => $args{'Description'},
-        Disabled    => $args{'Disabled'},
         LookupType  => $args{'LookupType'},
         Repeated    => $args{'Repeated'},
     );
@@ -404,6 +403,7 @@ sub Create {
         $OCF->Create(
             CustomField => $self->Id,
             ObjectId => $args{'Queue'},
+            Disabled => $args{'Disabled'},
         );
     }
 
@@ -488,8 +488,10 @@ sub LoadByName {
     # When loading by name, we _can_ load disabled fields, but prefer
     # non-disabled fields.
     $CFs->FindAllRows;
+    my $alias = RT::ObjectCustomFields->new( $self->CurrentUser )
+        ->JoinTargetToThis( $CFs, Left => 1, New => 1 );
     $CFs->OrderByCols(
-        { FIELD => "Disabled", ORDER => 'ASC' },
+        { ALIAS => $alias, FIELD => "Disabled", ORDER => 'ASC' },
     );
 
     # We only want one entry.
@@ -991,6 +993,19 @@ sub _Value {
     return $self->__Value( @_ );
 }
 
+=head2 Disabled
+
+Returns the current value of Disabled. 
+(In the database, Disabled is stored as smallint(6).)
+
+=cut
+
+sub Disabled {
+    my $self = shift;
+    my $record = RT::ObjectCustomField->new( $self->CurrentUser );
+    $record->LoadByCols( CustomField => $self->id );
+    return $record->Disabled;
+}
 
 =head2 SetDisabled
 
@@ -999,6 +1014,12 @@ Takes a boolean.
 0 will re-enable this field.
 
 =cut
+
+sub SetDisabled {
+    my $self = shift;
+    return RT::ObjectCustomField->new( $self->CurrentUser )
+        ->SetDisabledOnAll( CustomField => $self->id, Value => shift );
+}
 
 
 =head2 SetTypeComposite
@@ -1949,27 +1970,7 @@ Returns the current value of LastUpdatedBy.
 Returns the current value of LastUpdated. 
 (In the database, LastUpdated is stored as datetime.)
 
-
 =cut
-
-
-=head2 Disabled
-
-Returns the current value of Disabled. 
-(In the database, Disabled is stored as smallint(6).)
-
-
-
-=head2 SetDisabled VALUE
-
-
-Set Disabled to VALUE. 
-Returns (1, 'Status message') on success and (0, 'Error Message') on failure.
-(In the database, Disabled will be stored as a smallint(6).)
-
-
-=cut
-
 
 
 sub _CoreAccessible {
@@ -2005,8 +2006,6 @@ sub _CoreAccessible {
         {read => 1, auto => 1, sql_type => 4, length => 11,  is_blob => 0,  is_numeric => 1,  type => 'int(11)', default => '0'},
         LastUpdated => 
         {read => 1, auto => 1, sql_type => 11, length => 0,  is_blob => 0,  is_numeric => 0,  type => 'datetime', default => ''},
-        Disabled => 
-        {read => 1, write => 1, sql_type => 5, length => 6,  is_blob => 0,  is_numeric => 1,  type => 'smallint(6)', default => '0'},
 
  }
 };

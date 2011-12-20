@@ -91,7 +91,6 @@ sub _Init {
 	   FIELD => 'id',
 	   ORDER => 'ASC' },
      );
-    $self->{'with_disabled_column'} = 1;
 
     return ( $self->SUPER::_Init(@_) );
 }

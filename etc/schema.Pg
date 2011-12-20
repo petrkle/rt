@@ -248,6 +248,7 @@ CREATE TABLE ObjectScrips (
   Scrip integer NOT NULL,
   ObjectId integer NOT NULL,
   SortOrder integer NOT NULL DEFAULT 0  ,
+  Disabled integer NOT NULL DEFAULT 0 ,
 
   Creator integer NOT NULL DEFAULT 0  ,
   Created TIMESTAMP NULL  ,
@@ -568,7 +569,6 @@ CREATE TABLE CustomFields (
   Created TIMESTAMP NULL  ,
   LastUpdatedBy integer NOT NULL DEFAULT 0  ,
   LastUpdated TIMESTAMP NULL  ,
-  Disabled integer NOT NULL DEFAULT 0 ,
   PRIMARY KEY (id)
 
 );
@@ -584,6 +584,7 @@ CREATE TABLE ObjectCustomFields (
   CustomField integer NOT NULL,
   ObjectId integer NOT NULL,
   SortOrder integer NOT NULL DEFAULT 0  ,
+  Disabled integer NOT NULL DEFAULT 0 ,
 
   Creator integer NOT NULL DEFAULT 0  ,
   Created TIMESTAMP NULL  ,
