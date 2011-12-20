@@ -103,17 +103,6 @@ sub CustomFields {
     map { $_->CustomFieldObj } @{$self->ItemsArrayRef};
 }
 
-sub _DoSearch {
-    my $self = shift;
-    if ($self->{'_cfs_alias'}) {
-    $self->Limit( ALIAS           => $self->{'_cfs_alias'},
-                 FIELD           => 'Disabled',
-                 OPERATOR        => '!=',
-                 VALUE           =>  1);
-    }
-    $self->SUPER::_DoSearch()
-}
-
 RT::Base->_ImportOverlays();
 
 1;
