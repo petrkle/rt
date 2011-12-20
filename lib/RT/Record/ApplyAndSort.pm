@@ -93,6 +93,7 @@ sub Create {
             ObjectId => $args{'ObjectId'},
         );
     }
+    $args{'Disabled'} ||= 0;
 
     return $self->SUPER::Create(
         %args,
