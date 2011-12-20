@@ -64,6 +64,19 @@ sub ObjectCollectionClass {
 
 # XXX: Where is ACL check when we create a record?
 
+sub Create {
+    my $self = shift;
+    my %args = (@_);
+    return $self->SUPER::Create(
+        map { $_ => $args{ $_ } } qw(
+            CustomField ObjectId
+            SortOrder Disabled
+            Created Creator
+            LastUpdated LastUpdatedBy
+        )
+    );
+}
+
 =head2 CustomFieldObj
 
 Returns the CustomField Object which has the id returned by CustomField

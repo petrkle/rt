@@ -58,6 +58,19 @@ use RT::ObjectScrips;
 sub Table {'ObjectScrips'}
 sub ObjectCollectionClass {'RT::Queues'}
 
+sub Create {
+    my $self = shift;
+    my %args = (@_);
+    return $self->SUPER::Create(
+        map { $_ => $args{ $_ } } qw(
+            Scrip ObjectId
+            SortOrder Disabled
+            Created Creator
+            LastUpdated LastUpdatedBy
+        )
+    );
+}
+
 =head2 ScripObj
 
 Returns the Scrip Object which has the id returned by Scrip
