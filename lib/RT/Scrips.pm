@@ -391,8 +391,7 @@ sub _FindScrips {
         ENTRYAGGREGATOR => 'OR',
     );
 
-    # Promise some kind of ordering
-    $self->OrderBy( FIELD => 'Description' );
+    $self->ApplySortOrder;
 
     # we call Count below, but later we always do search
     # so just do search and get count from results
