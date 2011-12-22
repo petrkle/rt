@@ -175,7 +175,6 @@ sub Create {
     my ( $id, $msg ) = $self->SUPER::Create(
         Template               => $template->Id,
         ScripCondition         => $condition->id,
-        Stage                  => $args{'Stage'},
         ScripAction            => $action->Id,
         Description            => $args{'Description'},
         CustomPrepareCode      => $args{'CustomPrepareCode'},
@@ -184,11 +183,19 @@ sub Create {
     );
     return ( $id, $msg ) unless $id;
 
-    unless ( $args{'Stage'} eq 'Disabled' ) {
-        my ($status, $msg) = RT::ObjectScrip->new( $self->CurrentUser )
-            ->Apply( Scrip => $self, ObjectId => $args{'Queue'} );
-        $RT::Logger->error( "Couldn't apply scrip: $msg" ) unless $status;
+    if ( $args{'Stage'} eq 'Disabled' ) {
+        $RT::Logger->warning("Disabled Stage is deprecated");
+        $args{'Stage'} = 'TransactionCreate';
+        $args{'Disabled'} = 1;
     }
+
+    (my $status, $msg) = RT::ObjectScrip->new( $self->CurrentUser )->Apply(
+        Scrip    => $self,
+        Stage    => $args{'Stage'},
+        ObjectId => $args{'Queue'},
+        Disabled => $args{'Disabled'},
+    );
+    $RT::Logger->error( "Couldn't apply scrip: $msg" ) unless $status;
 
     return ( $id, $self->loc('Scrip Created') );
 }
@@ -317,7 +324,27 @@ sub TemplateObj {
     return ( $self->{'TemplateObj'} );
 }
 
+=head2 Stage
 
+Takes TicketObj named argument and returns scrip's stage when
+applied to ticket's queue.
+
+=cut
+
+sub Stage {
+    my $self = shift;
+    my %args = ( TicketObj => undef, @_ );
+
+    my $queue = $args{'TicketObj'}->Queue;
+    my $rec = RT::ObjectScrip->new( $self->CurrentUser );
+    $rec->LoadByCols( Scrip => $self->id, ObjectId => $queue );
+    return $rec->Stage if $rec->id;
+
+    $rec->LoadByCols( Scrip => $self->id, ObjectId => 0 );
+    return $rec->Stage if $rec->id;
+
+    return undef;
+}
 
 
 =head2 Apply { TicketObj => undef, TransactionObj => undef}
@@ -404,16 +431,24 @@ sub IsApplicable {
 
 	my @Transactions;
 
-        if ( $self->Stage eq 'TransactionCreate') {
+        my $stage = $self->Stage( TicketObj => $args{'TicketObj'} );
+        unless ( $stage ) {
+	    $RT::Logger->error(
+                "Scrip #". $self->id ." is not applied to"
+                ." queue #". $args{'TicketObj'}->Queue
+            );
+	    return (undef);
+        }
+        elsif ( $stage eq 'TransactionCreate') {
 	    # Only look at our current Transaction
 	    @Transactions = ( $args{'TransactionObj'} );
         }
-        elsif ( $self->Stage eq 'TransactionBatch') {
+        elsif ( $stage eq 'TransactionBatch') {
 	    # Look at all Transactions in this Batch
             @Transactions = @{ $args{'TicketObj'}->TransactionBatch || [] };
         }
 	else {
-	    $RT::Logger->error( "Unknown Scrip stage:" . $self->Stage );
+	    $RT::Logger->error( "Unknown Scrip stage: '$stage'" );
 	    return (undef);
 	}
 	my $ConditionObj = $self->ConditionObj;
@@ -906,24 +941,6 @@ Returns (1, 'Status message') on success and (0, 'Error Message') on failure.
 =cut
 
 
-=head2 Stage
-
-Returns the current value of Stage.
-(In the database, Stage is stored as varchar(32).)
-
-
-
-=head2 SetStage VALUE
-
-
-Set Stage to VALUE.
-Returns (1, 'Status message') on success and (0, 'Error Message') on failure.
-(In the database, Stage will be stored as a varchar(32).)
-
-
-=cut
-
-
 =head2 Template
 
 Returns the current value of Template.
@@ -1000,8 +1017,6 @@ sub _CoreAccessible {
 		{read => 1, write => 1, sql_type => -4, length => 0,  is_blob => 1,  is_numeric => 0,  type => 'text', default => ''},
         CustomCommitCode =>
 		{read => 1, write => 1, sql_type => -4, length => 0,  is_blob => 1,  is_numeric => 0,  type => 'text', default => ''},
-        Stage =>
-		{read => 1, write => 1, sql_type => 12, length => 32,  is_blob => 0,  is_numeric => 0,  type => 'varchar(32)', default => ''},
         Template =>
 		{read => 1, write => 1, sql_type => 4, length => 11,  is_blob => 0,  is_numeric => 1,  type => 'int(11)', default => '0'},
         Creator =>

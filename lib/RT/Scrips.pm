@@ -126,6 +126,39 @@ sub LimitToNotAdded {
         ->LimitTargetToNotApplied( $self => @_ );
 }
 
+sub LimitByStage  {
+    my $self = shift;
+    my %args = @_%2? (Stage => @_) : @_;
+    return unless defined $args{'Stage'};
+
+    my $alias = RT::ObjectScrips->new( $self->CurrentUser )
+        ->JoinTargetToThis( $self, %args );
+    $self->Limit(
+        ALIAS => $alias,
+        FIELD => 'Stage',
+        VALUE => $args{'Stage'},
+    );
+}
+
+=head2 LimitToEnabled
+
+Limits scrips to that are applied to any queue or globally
+and application is not disabled.
+
+=cut
+
+sub LimitToEnabled {
+    my $self = shift;
+
+    my $alias = RT::ObjectScrips->new( $self->CurrentUser )
+        ->JoinTargetToThis( $self );
+    $self->Limit(
+        ALIAS => $alias,
+        FIELD => 'Disabled',
+        VALUE => 0,
+    );
+}
+
 sub ApplySortOrder {
     my $self = shift;
     my $order = shift || 'ASC';
@@ -354,12 +387,9 @@ sub _FindScrips {
                  @_ );
 
 
-    $self->LimitToQueue( $self->{'TicketObj'}->QueueObj->Id )
-      ;    #Limit it to  $Ticket->QueueObj->Id
-    $self->LimitToGlobal();
-      # or to "global"
-
-    $self->Limit( FIELD => "Stage", VALUE => $args{'Stage'} );
+    $self->LimitToQueue( $self->{'TicketObj'}->QueueObj->Id );
+    $self->LimitToGlobal;
+    $self->LimitByStage( $args{'Stage'} );
 
     my $ConditionsAlias = $self->NewAlias('ScripConditions');
 
