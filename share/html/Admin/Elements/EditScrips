@@ -106,7 +106,7 @@ if ( $id ) {
 my $find_scrips = sub {
     my %args = (Applied => 1, @_);
     my $scrips = RT::Scrips->new($session{'CurrentUser'});
-    $scrips->Limit( FIELD => 'Stage', VALUE => $args{'Stage'} )
+    $scrips->LimitByStage( $args{'Stage'} )
         if $args{'Stage'};
     my $method = $args{'Applied'}? 'LimitToAdded' : 'LimitToNotAdded';
     $scrips->$method(0, $id);
