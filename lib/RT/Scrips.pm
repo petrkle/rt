@@ -111,7 +111,7 @@ another call to this method or LimitToQueue
 
 sub LimitToGlobal  {
     my $self = shift;
-    return $self->LimitToQueue(0);
+    return $self->LimitToQueue(0, @_);
 }
 
 sub LimitToAdded {
