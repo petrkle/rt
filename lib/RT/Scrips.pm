@@ -87,15 +87,15 @@ another call to this method
 
 sub LimitToQueue  {
     my $self = shift;
-    my $queue = shift;
-    return unless defined $queue;
+    my %args = @_%2? (Queue => @_) : @_;
+    return unless defined $args{'Queue'};
 
     my $alias = RT::ObjectScrips->new( $self->CurrentUser )
-        ->JoinTargetToThis( $self );
+        ->JoinTargetToThis( $self, %args );
     $self->Limit(
         ALIAS => $alias,
         FIELD => 'ObjectId',
-        VALUE => int $queue,
+        VALUE => int $args{'Queue'},
     );
 }
 
