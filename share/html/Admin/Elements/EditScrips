@@ -102,6 +102,7 @@ if ( $id ) {
     $QueueObj->Load( $id );
     Abort(loc("Couldn't load queue #[_1]", $id)) unless $QueueObj->id;
 }
+$id ||= 0;
 
 my $find_scrips = sub {
     my %args = (Applied => 1, @_);
@@ -121,7 +122,7 @@ if ( $id ) {
 } else {
     $DisplayFormat = "__CheckBox.{RemoveScrip}__, $DisplayFormat";
 }
-$DisplayFormat .= ", __Move__";
+$DisplayFormat .= ", __Move.{$id}__";
 
 my %common_applied_args = (
     %ARGS,
