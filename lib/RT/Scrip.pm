@@ -215,6 +215,8 @@ sub Delete {
         return ( 0, $self->loc('Permission Denied') );
     }
 
+    RT::ObjectScrip->new( $self->CurrentUser )->DeleteAll( Scrip => $self );
+
     return ( $self->SUPER::Delete(@_) );
 }
 
