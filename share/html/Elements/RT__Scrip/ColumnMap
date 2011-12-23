@@ -140,7 +140,7 @@ my $COLUMN_MAP = {
             my $context = $_[2] || 0;
             return '' unless $_[0]->IsAdded( $context );
 
-            my $name = 'MoveCustomField';
+            my $name = 'MoveScrip';
             my $args = $m->caller_args( 1 );
             my @pass = ref $args->{'PassArguments'}
                 ? @{$args->{'PassArguments'}}

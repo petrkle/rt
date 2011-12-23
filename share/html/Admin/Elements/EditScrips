@@ -160,6 +160,24 @@ if ( $AddScrips ) {
     }
 }
 
+if ( $MoveScripUp ) {
+    my $scrip = RT::ObjectScrip->new( $session{'CurrentUser'} );
+    $scrip->LoadByCols( Scrip => $MoveScripUp, ObjectId => $id );
+    if ( $scrip->id ) {
+        my ($status, $msg) = $scrip->MoveUp;
+        push @actions, $msg;
+    }
+}
+
+if ( $MoveScripDown ) {
+    my $scrip = RT::ObjectScrip->new( $session{'CurrentUser'} );
+    $scrip->LoadByCols( Scrip => $MoveScripDown, ObjectId => $id );
+    if ( $scrip->id ) {
+        my ($status, $msg) = $scrip->MoveDown;
+        push @actions, $msg;
+    }
+}
+
 </%init>
 
 <%ARGS>
@@ -173,5 +191,8 @@ $RemoveScrips => undef
 @AddScrip => ()
 $AddScrips => undef
 $Stage     => 'TransactionCreate'
+
+$MoveScripUp => undef
+$MoveScripDown => undef
 
 </%ARGS>
