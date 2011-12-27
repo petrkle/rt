@@ -258,6 +258,7 @@ CREATE TABLE ObjectScrips (
 
 );
 
+CREATE UNIQUE INDEX ObjectScrips1 ON ObjectScrips (ObjectId, Scrip);
 
 
 
