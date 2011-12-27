@@ -348,6 +348,36 @@ sub Stage {
     return undef;
 }
 
+=head2 Disabled
+
+Returns the current value of Disabled. 
+
+=cut
+
+sub Disabled {
+    my $self = shift;
+    # we check only one record as at this moment all applications
+    # should be disabled or none, this method should be dropped when
+    # we implement full functionality
+    my $record = RT::ObjectScrip->new( $self->CurrentUser );
+    $record->LoadByCols( Scrip => $self->id );
+    return $record->Disabled;
+}
+
+=head2 SetDisabled
+
+Takes a boolean.
+1 will cause this scrip to no longer be avaialble for objects.
+0 will re-enable this field.
+
+=cut
+
+sub SetDisabled {
+    my $self = shift;
+    return RT::ObjectScrip->new( $self->CurrentUser )
+        ->SetDisabledOnAll( Scrip => $self->id, Value => shift );
+}
+
 
 =head2 Apply { TicketObj => undef, TransactionObj => undef}
 
