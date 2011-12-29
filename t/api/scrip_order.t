@@ -3,51 +3,73 @@ use strict;
 use warnings;
 
 use RT;
-use RT::Test tests => 7;
+use RT::Test tests => 9;
 
+my $queue = RT::Test->load_or_create_queue( Name => 'General' );
+ok $queue && $queue->id, 'loaded or created queue';
 
+{
+    my $ten = main->create_scrip_ok(
+        Description => "Set priority to 10",
+        Queue => $queue->id, 
+        CustomCommitCode => '$self->TicketObj->SetPriority(10);',
+    );
 
-my $scrip_queue = RT::Queue->new(RT->SystemUser);
-my ($queue_id, $msg) = $scrip_queue->Create( Name => "ScripOrdering-$$", 
-    Description => 'Test scrip ordering by description' );
-ok($queue_id, "Created scrip-ordering test queue? ".$msg);
+    my $five = main->create_scrip_ok(
+        Description => "Set priority to 5",
+        Queue => $queue->id,
+        CustomCommitCode => '$self->TicketObj->SetPriority(5);', 
+    );
 
-my $priority_ten_scrip = RT::Scrip->new(RT->SystemUser);
-(my $id, $msg) = $priority_ten_scrip->Create( 
-    Description => "10 set priority $$",
-    Queue => $queue_id, 
-    ScripCondition => 'On Create',
-    ScripAction => 'User Defined', 
-    CustomPrepareCode => '$RT::Logger->debug("Setting priority to 10..."); return 1;',
-    CustomCommitCode => '$self->TicketObj->SetPriority(10);',
-    Template => 'Blank',
-    Stage => 'TransactionCreate',
-);
-ok($id, "Created priority-10 scrip? ".$msg);
+    my $ticket = RT::Ticket->new(RT->SystemUser);
+    my ($id, $msg) = $ticket->Create( 
+        Queue => $queue->id, 
+        Subject => "Scrip order test $$",
+    );
+    ok($ticket->id, "Created ticket? id=$id");
+    is($ticket->Priority , 5, "By default newer scrip is last");
 
-my $priority_five_scrip = RT::Scrip->new(RT->SystemUser);
-($id, $msg) = $priority_ten_scrip->Create( 
-    Description => "05 set priority $$",
-    Queue => $queue_id, 
-    ScripCondition => 'On Create',
-    ScripAction => 'User Defined', 
-    CustomPrepareCode => '$RT::Logger->debug("Setting priority to 5..."); return 1;',
-    CustomCommitCode => '$self->TicketObj->SetPriority(5);', 
-    Template => 'Blank',
-    Stage => 'TransactionCreate',
-);
-ok($id, "Created priority-5 scrip? ".$msg);
+    main->move_scrip_ok( $five, $queue->id, 'up' );
 
-my $ticket = RT::Ticket->new(RT->SystemUser);
-($id, $msg) = $ticket->Create( 
-    Queue => $queue_id, 
-    Requestor => 'order@example.com',
-    Subject => "Scrip order test $$",
-);
-ok($ticket->id, "Created ticket? id=$id");
+    $ticket = RT::Ticket->new(RT->SystemUser);
+    ($id, $msg) = $ticket->Create(
+        Queue => $queue->id,
+        Subject => "Scrip order test $$",
+    );
+    ok($ticket->id, "Created ticket? id=$id");
+    is($ticket->Priority , 10, "Moved scrip and result is different");
+}
 
-isnt($ticket->Priority , 0, "Ticket shouldn't be priority 0");
-isnt($ticket->Priority , 5, "Ticket shouldn't be priority 5");
-is  ($ticket->Priority , 10, "Ticket should be priority 10");
+sub create_scrip_ok {
+    my $self = shift;
+    my %args = (
+        ScripCondition => 'On Create',
+        ScripAction => 'User Defined', 
+        CustomPrepareCode => 'return 1',
+        CustomCommitCode => 'return 1', 
+        Template => 'Blank',
+        Stage => 'TransactionCreate',
+        @_
+    );
+
+    my $scrip = RT::Scrip->new( RT->SystemUser );
+    my ($id, $msg) = $scrip->Create( %args );
+    ok($id, "Created scrip") or diag "error: $msg";
+
+    return $scrip;
+}
+
+sub move_scrip_ok {
+    my $self = shift;
+    my ($scrip, $queue, $dir) = @_;
+
+    my $rec = RT::ObjectScrip->new( RT->SystemUser );
+    $rec->LoadByCols( Scrip => $scrip->id, ObjectId => $queue );
+    ok $rec->id, 'found application of the scrip';
+
+    my $method = 'Move'. ucfirst lc $dir;
+    my ($status, $msg) = $rec->$method();
+    ok $status, "moved scrip $dir" or diag "error: $msg";
+}
 
 
