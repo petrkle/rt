@@ -3,7 +3,7 @@ use strict;
 use warnings;
 
 use RT;
-use RT::Test tests => 110;
+use RT::Test tests => 204;
 
 my $queue = RT::Test->load_or_create_queue( Name => 'General' );
 ok $queue && $queue->id, 'loaded or created queue';
@@ -70,6 +70,32 @@ note "move around two local scrips";
     main->check_scrips_order(\@scrips, [$queue]);
 }
 
+note "move around two global scrips";
+{
+    main->delete_all_scrips();
+
+    my @scrips;
+    push @scrips, main->create_scrip_ok( Queue => 0 );
+    push @scrips, main->create_scrip_ok( Queue => 0 );
+    main->check_scrips_order(\@scrips, [$queue]);
+
+    main->move_scrip_ok( $scrips[0], 0, 'down' );
+    @scrips = @scrips[1, 0];
+    main->check_scrips_order(\@scrips, [$queue]);
+
+    main->move_scrip_ok( $scrips[0], 0, 'down' );
+    @scrips = @scrips[1, 0];
+    main->check_scrips_order(\@scrips, [$queue]);
+
+    main->move_scrip_ok( $scrips[1], 0, 'up' );
+    @scrips = @scrips[1, 0];
+    main->check_scrips_order(\@scrips, [$queue]);
+
+    main->move_scrip_ok( $scrips[1], 0, 'up' );
+    @scrips = @scrips[1, 0];
+    main->check_scrips_order(\@scrips, [$queue]);
+}
+
 note "move local scrip below global";
 {
     main->delete_all_scrips();
@@ -77,14 +103,30 @@ note "move local scrip below global";
     push @scrips, main->create_scrip_ok( Queue => $queue->id );
     push @scrips, main->create_scrip_ok( Queue => $queue_B->id );
     push @scrips, main->create_scrip_ok( Queue => 0 );
-    push @scrips, main->create_scrip_ok( Queue => $queue_B->id );
+    push @scrips, main->create_scrip_ok( Queue => $queue->id );
+    main->check_scrips_order(\@scrips, [$queue, $queue_B]);
 
     main->move_scrip_ok( $scrips[0], $queue->id, 'down' );
     @scrips = @scrips[1, 2, 0, 3];
     main->check_scrips_order(\@scrips, [$queue, $queue_B]);
 }
 
-note "move global scrip";
+note "move local scrip above global";
+{
+    main->delete_all_scrips();
+    my @scrips;
+    push @scrips, main->create_scrip_ok( Queue => $queue_B->id );
+    push @scrips, main->create_scrip_ok( Queue => 0 );
+    push @scrips, main->create_scrip_ok( Queue => $queue->id );
+    push @scrips, main->create_scrip_ok( Queue => $queue_B->id );
+    main->check_scrips_order(\@scrips, [$queue, $queue_B]);
+
+    main->move_scrip_ok( $scrips[-1], $queue_B->id, 'up' );
+    @scrips = @scrips[0, 3, 1, 2];
+    main->check_scrips_order(\@scrips, [$queue, $queue_B]);
+}
+
+note "move global scrip down with local in between";
 {
     main->delete_all_scrips();
     my @scrips;
@@ -93,9 +135,26 @@ note "move global scrip";
     push @scrips, main->create_scrip_ok( Queue => $queue->id );
     push @scrips, main->create_scrip_ok( Queue => 0 );
     push @scrips, main->create_scrip_ok( Queue => $queue->id );
+    main->check_scrips_order(\@scrips, [$queue, $queue_B]);
 
     main->move_scrip_ok( $scrips[0], 0, 'down' );
     @scrips = @scrips[1, 2, 3, 0, 4];
+    main->check_scrips_order(\@scrips, [$queue, $queue_B]);
+}
+
+note "move global scrip up with local in between";
+{
+    main->delete_all_scrips();
+    my @scrips;
+    push @scrips, main->create_scrip_ok( Queue => $queue->id );
+    push @scrips, main->create_scrip_ok( Queue => 0 );
+    push @scrips, main->create_scrip_ok( Queue => $queue_B->id );
+    push @scrips, main->create_scrip_ok( Queue => $queue->id );
+    push @scrips, main->create_scrip_ok( Queue => 0 );
+    main->check_scrips_order(\@scrips, [$queue, $queue_B]);
+
+    main->move_scrip_ok( $scrips[-1], 0, 'up' );
+    @scrips = @scrips[0, 4, 1, 2, 3];
     main->check_scrips_order(\@scrips, [$queue, $queue_B]);
 }
 
@@ -109,7 +168,6 @@ note "delete scrips one by one";
     push @scrips, main->create_scrip_ok( Queue => $queue_B->id );
     push @scrips, main->create_scrip_ok( Queue => $queue->id );
     push @scrips, main->create_scrip_ok( Queue => 0 );
-
     main->check_scrips_order(\@scrips, [$queue, $queue_B]);
 
     foreach my $idx (3, 2, 0 ) {
@@ -119,6 +177,7 @@ note "delete scrips one by one";
 }
 
 sub create_scrip_ok {
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $self = shift;
     my %args = (
         ScripCondition => 'On Create',
@@ -138,6 +197,7 @@ sub create_scrip_ok {
 }
 
 sub delete_all_scrips {
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $self = shift;
     my $scrips = RT::Scrips->new( RT->SystemUser );
     $scrips->UnLimit;
@@ -145,6 +205,7 @@ sub delete_all_scrips {
 }
 
 sub move_scrip_ok {
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $self = shift;
     my ($scrip, $queue, $dir) = @_;
 
@@ -158,6 +219,7 @@ sub move_scrip_ok {
 }
 
 sub check_scrips_order {
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $self = shift;
     my $scrips = shift;
     my $queues = shift;
@@ -197,6 +259,15 @@ sub check_scrips_order {
             $prev = $so;
         }
     }
+}
+
+sub dump_sort_order {
+
+    diag " id oid so";
+    diag join "\n", map { join "\t", @$_ } map @$_, $RT::Handle->dbh->selectall_arrayref(
+        "select Scrip, ObjectId, SortOrder from ObjectScrips ORDER BY SortOrder"
+    );
+
 }
 
 
