@@ -401,9 +401,21 @@ sub MoveDown {
 
 sub NextSortOrder {
     my $self = shift;
-    my $siblings = $self->Siblings( @_ );
-    $siblings->OrderBy( FIELD => 'SortOrder', ORDER => 'DESC' );
-    return 0 unless my $first = $siblings->First;
+    my %args = (@_);
+
+    my $oid = $args{'ObjectId'};
+    $oid = $self->ObjectId unless defined $oid;
+    $oid ||= 0;
+
+    my $neighbors = $self->Neighbors( %args );
+    if ( $oid ) {
+        $neighbors->LimitToObjectId( $oid );
+        $neighbors->LimitToObjectId( 0 );
+    } elsif ( !$neighbors->_isLimited ) {
+        $neighbors->UnLimit;
+    }
+    $neighbors->OrderBy( FIELD => 'SortOrder', ORDER => 'DESC' );
+    return 0 unless my $first = $neighbors->First;
     return $first->SortOrder + 1;
 }
 
