@@ -229,12 +229,18 @@ sub Delete {
     my $self = shift;
 
     my $siblings = $self->Neighbors;
-    $siblings->LimitToObjectId( $self->ObjectId );
-    $siblings->Limit( FIELD => 'SortOrder', OPERATOR => '>', VALUE => $self->SortOrder );
+    $siblings->Limit( FIELD => 'SortOrder', OPERATOR => '>=', VALUE => $self->SortOrder );
+    $siblings->OrderBy( FIELD => 'SortOrder', ORDER => 'ASC' );
 
-    # Move everything below us up
     my $sort_order = $self->SortOrder;
     while (my $record = $siblings->Next) {
+        next if $record->id == $self->id;
+        return $self->SUPER::Delete if $self->SortOrder == $record->SortOrder;
+        last;
+    }
+
+    # Move everything below us up
+    foreach my $record ( @{ $siblings->ItemsArrayRef } ) {
         $record->SetSortOrder($record->SortOrder - 1);
     }
 
