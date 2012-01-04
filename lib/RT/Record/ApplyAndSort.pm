@@ -305,52 +305,7 @@ Moves scrip up. See </Sorting scrips applications>.
 
 =cut
 
-sub MoveUp {
-    my $self = shift;
-
-    my $siblings = $self->Siblings;
-    $siblings->Limit( FIELD => 'SortOrder', OPERATOR => '<', VALUE => $self->SortOrder );
-    $siblings->OrderByCols( { FIELD => 'SortOrder', ORDER => 'DESC' } );
-
-    my @above = ($siblings->Next, $siblings->Next);
-    unless ($above[0]) {
-        return (0, "Can not move up. It's already at the top");
-    }
-
-    my $new_sort_order;
-    if ( $above[0]->ObjectId == $self->ObjectId ) {
-        $new_sort_order = $above[0]->SortOrder;
-        my ($status, $msg) = $above[0]->SetSortOrder( $self->SortOrder );
-        unless ( $status ) {
-            return (0, "Couldn't move scrip");
-        }
-    }
-    elsif ( $above[1] && $above[0]->SortOrder == $above[1]->SortOrder + 1 ) {
-        my $move_siblings = $self->Neighbors;
-        $move_siblings->Limit(
-            FIELD => 'SortOrder',
-            OPERATOR => '>=',
-            VALUE => $above[0]->SortOrder,
-        );
-        $move_siblings->OrderByCols( { FIELD => 'SortOrder', ORDER => 'DESC' } );
-        while ( my $record = $move_siblings->Next ) {
-            my ($status, $msg) = $record->SetSortOrder( $record->SortOrder + 1 );
-            unless ( $status ) {
-                return (0, "Couldn't move scrip");
-            }
-        }
-        $new_sort_order = $above[0]->SortOrder;
-    } else {
-        $new_sort_order = $above[0]->SortOrder - 1;
-    }
-
-    my ($status, $msg) = $self->SetSortOrder( $new_sort_order );
-    unless ( $status ) {
-        return (0, "Couldn't move scrip");
-    }
-
-    return (1,"Moved scrip up");
-}
+sub MoveUp { return shift->Move( Up => @_ ) }
 
 =head3 MoveDown
 
@@ -358,51 +313,98 @@ Moves scrip down. See </Sorting scrips applications>.
 
 =cut
 
-sub MoveDown {
+sub MoveDown { return shift->Move( Down => @_ ) }
+
+sub Move {
     my $self = shift;
+    my $dir = lc(shift || 'up');
+
+    my %meta;
+    if ( $dir eq 'down' ) {
+        %meta = qw(
+            next_op    >
+            next_order ASC
+            prev_op    <=
+            diff       +1
+        );
+    } else {
+        %meta = qw(
+            next_op    <
+            next_order DESC
+            prev_op    >=
+            diff       -1
+        );
+    }
 
     my $siblings = $self->Siblings;
-    $siblings->Limit( FIELD => 'SortOrder', OPERATOR => '>', VALUE => $self->SortOrder );
-    $siblings->OrderByCols( { FIELD => 'SortOrder', ORDER => 'ASC' } );
+    $siblings->Limit( FIELD => 'SortOrder', OPERATOR => $meta{'next_op'}, VALUE => $self->SortOrder );
+    $siblings->OrderBy( FIELD => 'SortOrder', ORDER => $meta{'next_order'} );
 
-    my @below = ($siblings->Next, $siblings->Next);
-    unless ($below[0]) {
-        return (0, "Can not move down. It's already at the bottom");
+    my @next = ($siblings->Next, $siblings->Next);
+    unless ($next[0]) {
+        return $dir eq 'down'
+            ? (0, "Can not move down. It's already at the bottom")
+            : (0, "Can not move up. It's already at the top")
+        ;
     }
 
-    my $new_sort_order;
-    if ( $below[0]->ObjectId == $self->ObjectId ) {
-        $new_sort_order = $below[0]->SortOrder;
-        my ($status, $msg) = $below[0]->SetSortOrder( $self->SortOrder );
-        unless ( $status ) {
-            return (0, "Couldn't move scrip");
-        }
-    }
-    elsif ( $below[1] && $below[0]->SortOrder + 1 == $below[1]->SortOrder ) {
-        my $move_siblings = $self->Neighbors;
-        $move_siblings->Limit(
-            FIELD => 'SortOrder',
-            OPERATOR => '<=',
-            VALUE => $below[0]->SortOrder,
+    my ($new_sort_order, $move);
+
+    unless ( $self->ObjectId ) {
+        # moving global, it can not share sort order, so just move it
+        # on place of next global and move everything in between one number
+
+        $new_sort_order = $next[0]->SortOrder;
+        $move = $self->Neighbors;
+        $move->Limit(
+            FIELD => 'SortOrder', OPERATOR => $meta{'next_op'}, VALUE => $self->SortOrder,
         );
-        $move_siblings->OrderByCols( { FIELD => 'SortOrder', ORDER => 'ASC' } );
-        while ( my $record = $move_siblings->Next ) {
-            my ($status, $msg) = $record->SetSortOrder( $record->SortOrder - 1 );
-            unless ( $status ) {
-                return (0, "Couldn't move scrip");
-            }
+        $move->Limit(
+            FIELD => 'SortOrder', OPERATOR => $meta{'prev_op'}, VALUE => $next[0]->SortOrder,
+            ENTRYAGGREGATOR => 'AND',
+        );
+    }
+    elsif ( $next[0]->ObjectId == $self->ObjectId ) {
+        # moving two locals, just swap them, they should follow 'so = so+/-1' rule
+        $new_sort_order = $next[0]->SortOrder;
+        $move = $next[0];
+    }
+    else {
+        # moving local behind global
+        unless ( $self->IsSortOrderShared ) {
+            # not shared SO allows us to swap
+            $new_sort_order = $next[0]->SortOrder;
+            $move = $next[0];
         }
-        $new_sort_order = $below[0]->SortOrder;
-    } else {
-        $new_sort_order = $below[0]->SortOrder + 1;
+        elsif ( $next[1] ) {
+            # more records there and shared SO, we have to move everything
+            $new_sort_order = $next[0]->SortOrder;
+            $move = $self->Neighbors;
+            $move->Limit(
+                FIELD => 'SortOrder', OPERATOR => $meta{prev_op}, VALUE => $next[0]->SortOrder,
+            );
+        }
+        else {
+            # shared SO and place after is free, so just jump
+            $new_sort_order = $next[0]->SortOrder + $meta{'diff'};
+        }
+    }
+
+    if ( $move ) {
+        foreach my $record ( $move->isa('RT::Record')? ($move) : @{ $move->ItemsArrayRef } ) {
+            my ($status, $msg) = $record->SetSortOrder(
+                $record->SortOrder - $meta{'diff'}
+            );
+            return (0, "Couldn't move: $msg") unless $status;
+        }
     }
 
     my ($status, $msg) = $self->SetSortOrder( $new_sort_order );
     unless ( $status ) {
-        return (0, "Couldn't move scrip");
+        return (0, "Couldn't move: $msg");
     }
 
-    return (1,"Moved scrip down");
+    return (1,"Moved");
 }
 
 sub NextSortOrder {
@@ -423,6 +425,16 @@ sub NextSortOrder {
     $neighbors->OrderBy( FIELD => 'SortOrder', ORDER => 'DESC' );
     return 0 unless my $first = $neighbors->First;
     return $first->SortOrder + 1;
+}
+
+sub IsSortOrderShared {
+    my $self = shift;
+    return 0 unless $self->ObjectId;
+
+    my $neighbors = $self->Neighbors;
+    $neighbors->Limit( FIELD => 'id', OPERATOR => '!=', VALUE => $self->id );
+    $neighbors->Limit( FIELD => 'SortOrder', VALUE => $self->SortOrder );
+    return $neighbors->Count;
 }
 
 sub TargetObj {
