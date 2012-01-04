@@ -228,23 +228,17 @@ sub _AppliedTo {
 sub Delete {
     my $self = shift;
 
+    return $self->SUPER::Delete if $self->IsSortOrderShared;
+
+    # Move everything below us up
     my $siblings = $self->Neighbors;
     $siblings->Limit( FIELD => 'SortOrder', OPERATOR => '>=', VALUE => $self->SortOrder );
     $siblings->OrderBy( FIELD => 'SortOrder', ORDER => 'ASC' );
-
-    my $sort_order = $self->SortOrder;
-    while (my $record = $siblings->Next) {
-        next if $record->id == $self->id;
-        return $self->SUPER::Delete if $self->SortOrder == $record->SortOrder;
-        last;
-    }
-
-    # Move everything below us up
     foreach my $record ( @{ $siblings->ItemsArrayRef } ) {
         $record->SetSortOrder($record->SortOrder - 1);
     }
 
-    $self->SUPER::Delete;
+    return $self->SUPER::Delete;
 }
 
 sub DeleteAll {
