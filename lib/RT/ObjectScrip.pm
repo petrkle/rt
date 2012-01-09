@@ -61,6 +61,7 @@ sub ObjectCollectionClass {'RT::Queues'}
 sub Create {
     my $self = shift;
     my %args = (@_);
+    $args{'Stage'} ||= 'TransactionCreate'; #XXX: why don't we turn undef into default?
     return $self->SUPER::Create(
         map { $_ => $args{ $_ } } qw(
             Scrip Stage ObjectId
