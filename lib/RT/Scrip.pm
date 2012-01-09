@@ -220,6 +220,8 @@ sub Delete {
     return ( $self->SUPER::Delete(@_) );
 }
 
+sub IsGlobal { return shift->IsAdded(0) }
+
 sub IsAdded {
     my $self = shift;
     my $record = RT::ObjectScrip->new( $self->CurrentUser );
