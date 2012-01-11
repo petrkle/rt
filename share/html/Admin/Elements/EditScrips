@@ -51,7 +51,7 @@
 <input type="hidden" class="hidden" name="id" value="<% $id %>" />
 
 <h2><&|/l&>Scrips</&></h2>
-<div class="admin-hint">Scrips run after each individual change to a ticket.</div>
+<div class="admin-hint">Scrips normally run after each individual change to a ticket.</div>
 % my $scrips = $find_scrips->(Stage => 'TransactionCreate');
 <& /Elements/CollectionList, %common_applied_args, Collection => $scrips &>
 % unless ( $scrips->Count ) {
