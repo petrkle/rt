@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 use RT;
-use RT::Test tests => 61;
+use RT::Test tests => 66;
 
 my $queue = RT::Test->load_or_create_queue( Name => 'General' );
 ok $queue && $queue->id, 'loaded or created queue';
@@ -166,6 +166,27 @@ note 'check applications vs. templates';
     ($status, $msg) = $scrip->AddToObject( $queue_B->id );
     ok($status, 'added scrip');
     main->check_applications($scrip, [$queue, $queue_B], [0]);
+}
+
+note 'basic check for disabling scrips';
+{
+    my $scrip = RT::Scrip->new(RT->SystemUser);
+    my ($status, $msg) = $scrip->Create(
+        Queue          => $queue->Id,
+        ScripAction    => 'User Defined',
+        ScripCondition => 'User Defined',
+        Template       => 'Blank',
+    );
+    ok($status, "created scrip");
+    is($scrip->Disabled, 0, "not disabled");
+
+    ($status,$msg) = $scrip->SetDisabled(1);
+    is($scrip->Disabled, 1, "disabled");
+
+    ($status, $msg) = $scrip->RemoveFromObject( $queue->id );
+    ok($status, 'removed scrip from queue');
+
+    is($scrip->Disabled, undef, "not applied");
 }
 
 sub check_applications {
