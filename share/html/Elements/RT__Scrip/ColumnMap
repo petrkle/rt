@@ -93,20 +93,6 @@ my $COLUMN_MAP = {
 	attribute => 'Description',
 	value     => sub { return $_[0]->Description() },
     },
-
-    AdminURL => {
-	value     => sub {
-            my $queue = $_[0]->AddedTo->First;
-            my $res = 'Admin';
-            if ( $queue ) {
-                $res .= '/Queues/Scrip.html?Queue='. $queue->id .'&';
-            } else {
-                $res .= '/Global/Scrip.html?';
-            }
-            $res .= 'id='. $_[0]->id;
-            return $res;
-        },
-    },
     RemoveCheckBox => {
         title => sub {
             my $name = 'RemoveScrip';

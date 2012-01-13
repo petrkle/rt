@@ -2578,8 +2578,8 @@ Set(%AdminSearchResultFormat,
         .q{,__AppliedTo__, __FriendlyType__, __FriendlyPattern__},
 
     Scrips =>
-        q{'<a href="__WebPath__/__AdminURL__">__id__</a>/TITLE:#'}
-        .q{,'<a href="__WebPath__/__AdminURL__">__Description__</a>/TITLE:Description'}
+        q{'<a href="__WebPath__/Admin/Scrips/Modify.html?id=__id__">__id__</a>/TITLE:#'}
+        .q{,'<a href="__WebPath__/Admin/Scrips/Modify.html?id=__id__">__Description__</a>/TITLE:Description'}
         .q{, __Condition__, __Action__, __Template__},
 
     Templates =>
