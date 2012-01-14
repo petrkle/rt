@@ -104,7 +104,7 @@ my $build_admin_menu = sub {
             path        => '/Admin/Scrips/',
         );
         $scrips->child( select => title => loc('Select'), path => "/Admin/Scrips/" );
-        $scrips->child( create => title => loc('Create'), path => "/Admin/Scrips/Modify.html?Create=1" );
+        $scrips->child( create => title => loc('Create'), path => "/Admin/Scrips/Create.html" );
     }
 
     my $admin_global = $admin->child( global =>
