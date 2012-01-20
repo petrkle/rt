@@ -45,30 +45,56 @@
 %# those contributions and any derivatives thereof.
 %#
 %# END BPS TAGGED BLOCK }}}
-<tr><td class="label"><&|/l&>Description</&>:</td><td class="value">\
-<input name="Description" \
-    size="60" \
-    value="<% $ARGS{"Description"} || $Scrip->Description || '' %>" />
-</td></tr>
-
-<tr><td class="label"><&|/l&>Condition</&>:</td><td class="value">\
-<& /Admin/Elements/SelectScripCondition,
-    Default => $ARGS{"ScripCondition"} || $Scrip->ConditionObj->Id,
-&></td></tr>
-
-<tr><td class="label"><&|/l&>Action</&>:</td><td class="value">\
-<& /Admin/Elements/SelectScripAction,
-    Default => $ARGS{"ScripAction"} || $Scrip->ActionObj->Id,
-&></td></tr>
-
-<tr><td class="label"><&|/l&>Template</&>:</td><td class="value">\
-<& SelectTemplate,
-    Default => $ARGS{"Template"}, Scrip => $Scrip, Queue => $Queue,
-&></td></tr>
+<select name="<% $Name %>">
+<option value=""><% $current || '-' %></option>
+% foreach my $name ( @list ) {
+<option value="<% $name %>" \
+    <% lc($Default||'') eq lc $name ? 'selected="selected"' : '' |n %>
+><% loc($name) %></option>
+% }
+</select>
 
 <%ARGS>
-$Scrip
+$Name => 'Template'
 $Queue => undef
+$Scrip => undef
+$Default => undef
 </%ARGS>
 <%INIT>
+
+my $current;
+$current = $Scrip->TemplateObj->Name if $Scrip;
+
+my $global = RT::Templates->new($session{'CurrentUser'});
+$global->LimitToGlobal;
+
+my %global;
+$global{ lc $_ } = $_ foreach map $_->Name, @{ $global->ItemsArrayRef };
+
+my @queues;
+if ( $Scrip && $Scrip->id ) {
+    @queues = @{ $Scrip->AddedTo->ItemsArrayRef };
+}
+elsif ( $Queue && $Queue->id ) {
+    @queues = ($Queue);
+}
+
+my (%names, %counters);
+foreach my $queue ( @queues ) {
+    my $templates = RT::Templates->new($session{'CurrentUser'});
+    $templates->LimitToQueue( $queue->id );
+    foreach my $name ( map $_->Name, @{ $templates->ItemsArrayRef } ) {
+        next if $global{ lc $name };
+        $counters{ lc $name }++;
+        $names{lc $name} = $name;
+    }
+}
+delete $counters{ $_ }
+    foreach grep $counters{$_} != @queues,
+    keys %counters;
+
+my @list =
+    sort { lc loc($a) cmp lc loc($b) }
+    map $global{$_} || $names{$_},
+    keys %global, keys %counters;
 </%INIT>
