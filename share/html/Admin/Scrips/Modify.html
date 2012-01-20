@@ -58,15 +58,17 @@
 <& Elements/EditBasics, %ARGS, Scrip => $scrip &>
 
 % if ( $added_to_any ) {
-<tr><td class="label"><&|/l&>Added</&>:</td><td class="value">\
+<tr><td class="label"><a href="Objects.html?id=<% $id %>"><&|/l&>Added</&></a>:</td>
+<td class="value">\
 % if ( $scrip->IsGlobal ) {
-<% loc('Global') %>
+<a href="<% RT->Config->Get('WebPath') %>/Admin/Global/Scrips.html"><% loc('Global') %></a>
 % } else {
 % my $added_to = $scrip->AddedTo;
 % my $found = 0;
 % while ( my $queue = $added_to->Next ) {
 % $m->out(', ') if $found++;
-<% $queue->Name %>
+<a href="<% RT->Config->Get('WebPath') %>/Admin/Queues/Scrips.html?id=<% $queue->id %>">\
+<% $queue->Name %></a>\
 % last if $found == 10;
 % }
 % $m->out(', ...') if $found == 10;
