@@ -374,15 +374,16 @@ my $build_admin_menu = sub {
         }
     }
 
-    if ( $request_path =~ m{^/Admin/Global/(Scrip|Template)s?\.html} ) {
-        my $type = $1;
+    if ( $request_path =~ m{^/Admin/Global/Scrips\.html} ) {
         my $tabs = PageMenu();
+        $tabs->child( select => title => loc('Select'), path => "/Admin/Global/Scrips.html" );
+        $tabs->child( create => title => loc('Create'), path => "/Admin/Scrips/Create.html" );
+    }
 
-        # With only two elements, swapping between dropdown and menu is kinda dumb
-        # In the glorious future this should be cleaner.
-
-        $tabs->child( select => title => loc('Select'), path => "/Admin/Global/${type}s.html" );
-        $tabs->child( create => title => loc('Create'), path => "/Admin/Global/${type}.html?Create=1" );
+    if ( $request_path =~ m{^/Admin/Global/Templates?\.html} ) {
+        my $tabs = PageMenu();
+        $tabs->child( select => title => loc('Select'), path => "/Admin/Global/Templates.html" );
+        $tabs->child( create => title => loc('Create'), path => "/Admin/Global/Template.html?Create=1" );
     }
 
     if ( $request_path =~ m{^/Admin/Articles/Classes/} ) {
