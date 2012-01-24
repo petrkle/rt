@@ -72,12 +72,8 @@ my %global;
 $global{ lc $_ } = $_ foreach map $_->Name, @{ $global->ItemsArrayRef };
 
 my @queues;
-if ( $Scrip && $Scrip->id ) {
-    @queues = @{ $Scrip->AddedTo->ItemsArrayRef };
-}
-elsif ( $Queue && $Queue->id ) {
-    @queues = ($Queue);
-}
+push @queues, @{ $Scrip->AddedTo->ItemsArrayRef } if $Scrip && $Scrip->id;
+push @queues, $Queue if $Queue && $Queue->id;
 
 my (%names, %counters);
 foreach my $queue ( @queues ) {
