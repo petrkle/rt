@@ -112,9 +112,10 @@ $added_to_any = 1 if defined $disabled;
 if ( $Update ) {
     my @attribs = qw(
         Description
-        ScripAction ScripCondition Template
         CustomPrepareCode CustomCommitCode CustomIsApplicableCode
     );
+    push @attribs, grep defined $ARGS{$_} && length $ARGS{$_},
+        qw(ScripAction ScripCondition Template);
     if ( $ARGS{'SetEnabled'} && $added_to_any ) {
         push @attribs, 'Disabled';
         $ARGS{"Disabled"} = $ARGS{"Enabled"}? 0 : 1;
