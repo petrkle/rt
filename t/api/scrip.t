@@ -1,7 +1,6 @@
 
 use strict;
 use warnings;
-use RT;
 use RT::Test tests => 66;
 
 my $queue = RT::Test->load_or_create_queue( Name => 'General' );
