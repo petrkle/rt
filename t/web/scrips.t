@@ -171,7 +171,7 @@ note "apply scrip in different stage to different queues";
     my ($sid) = ($m->content =~ /Modify scrip #(\d+)/);
     ok $sid, "found scrip id on the page";
 
-    $m->follow_link_ok({ text => 'Added to' });
+    $m->follow_link_ok({ text => 'Applies to' });
     ok $m->form_name('AddRemoveScrip');
     $m->select('Stage' => 'Batch');
     $m->tick( "AddScrip-$sid" => $queue->id );

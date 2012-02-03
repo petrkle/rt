@@ -370,7 +370,7 @@ my $build_admin_menu = sub {
 
             my $tabs = PageMenu();
             $tabs->child( basics => title => loc('Basics') => path => "/Admin/Scrips/Modify.html?id=".$id );
-            $tabs->child( 'added-to' => title => loc('Added to'), path => "/Admin/Scrips/Objects.html?id=" . $id );
+            $tabs->child( 'applies-to' => title => loc('Applies to'), path => "/Admin/Scrips/Objects.html?id=" . $id );
         }
     }
 
