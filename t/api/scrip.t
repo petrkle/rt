@@ -1,7 +1,7 @@
 
 use strict;
 use warnings;
-use RT::Test tests => 66;
+use RT::Test tests => 70;
 
 my $queue = RT::Test->load_or_create_queue( Name => 'General' );
 ok $queue && $queue->id, 'loaded or created queue';
@@ -171,16 +171,38 @@ note 'basic check for disabling scrips';
 {
     my $scrip = RT::Scrip->new(RT->SystemUser);
     my ($status, $msg) = $scrip->Create(
-        Queue          => $queue->Id,
-        ScripAction    => 'User Defined',
-        ScripCondition => 'User Defined',
-        Template       => 'Blank',
+        Queue => $queue->id,
+        ScripCondition => 'On Create',
+        ScripAction => 'User Defined',
+        CustomPrepareCode => 'return 1',
+        CustomCommitCode => '$self->TicketObj->SetPriority("87"); return 1',
+        Template => 'Blank'
     );
     ok($status, "created scrip");
     is($scrip->Disabled, 0, "not disabled");
 
+    {
+        my $ticket = RT::Ticket->new(RT->SystemUser);
+        my ($tid, undef, $msg) = $ticket->Create(
+            Queue => $queue->id,
+            Subject => "test",
+        );
+        ok($tid, "created ticket") or diag "error: $msg";
+        is ($ticket->Priority , '87', "Ticket priority is set right");
+    }
+
     ($status,$msg) = $scrip->SetDisabled(1);
     is($scrip->Disabled, 1, "disabled");
+
+    {
+        my $ticket = RT::Ticket->new(RT->SystemUser);
+        my ($tid, undef, $msg) = $ticket->Create(
+            Queue => $queue->id,
+            Subject => "test",
+        );
+        ok($tid, "created ticket") or diag "error: $msg";
+        isnt ($ticket->Priority , '87', "Ticket priority is set right");
+    }
 
     ($status, $msg) = $scrip->RemoveFromObject( $queue->id );
     ok($status, 'removed scrip from queue');

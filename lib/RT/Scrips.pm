@@ -389,6 +389,7 @@ sub _FindScrips {
 
     $self->LimitToQueue( $self->{'TicketObj'}->QueueObj->Id );
     $self->LimitToGlobal;
+    $self->LimitToEnabled;
     $self->LimitByStage( $args{'Stage'} );
 
     my $ConditionsAlias = $self->NewAlias('ScripConditions');
