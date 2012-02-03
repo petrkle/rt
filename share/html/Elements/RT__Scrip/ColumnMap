@@ -93,6 +93,16 @@ my $COLUMN_MAP = {
 	attribute => 'Description',
 	value     => sub { return $_[0]->Description() },
     },
+    Disabled => {
+        title     => \'&nbsp;',
+        value     => sub {
+            my $v = $_[0]->Disabled;
+            return !defined $v
+                ? $_[0]->loc('Not applied')
+                : $v ? $_[0]->loc('Disabled')
+                : $_[0]->loc('Enabled')
+        },
+    },
     RemoveCheckBox => {
         title => sub {
             my $name = 'RemoveScrip';
