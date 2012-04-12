@@ -1004,7 +1004,7 @@ Returns (1, 'Status message') on success and (0, 'Error Message') on failure.
 =head2 Template
 
 Returns the current value of Template.
-(In the database, Template is stored as int(11).)
+(In the database, Template is stored as varchar(200).)
 
 
 
@@ -1013,7 +1013,7 @@ Returns the current value of Template.
 
 Set Template to VALUE.
 Returns (1, 'Status message') on success and (0, 'Error Message') on failure.
-(In the database, Template will be stored as a int(11).)
+(In the database, Template will be stored as a varchar(200).)
 
 
 =cut
@@ -1078,7 +1078,7 @@ sub _CoreAccessible {
         CustomCommitCode =>
 		{read => 1, write => 1, sql_type => -4, length => 0,  is_blob => 1,  is_numeric => 0,  type => 'text', default => ''},
         Template =>
-		{read => 1, write => 1, sql_type => 4, length => 11,  is_blob => 0,  is_numeric => 1,  type => 'int(11)', default => '0'},
+		{read => 1, write => 1, sql_type => 12, length => 200,  is_blob => 0,  is_numeric => 0,  type => 'varchar(200)', default => 'Blank'},
         Creator =>
 		{read => 1, auto => 1, sql_type => 4, length => 11,  is_blob => 0,  is_numeric => 1,  type => 'int(11)', default => '0'},
         Created =>

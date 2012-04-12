@@ -150,7 +150,7 @@ CREATE TABLE Scrips (
   CustomIsApplicableCode text NULL  ,
   CustomPrepareCode text NULL  ,
   CustomCommitCode text NULL  ,
-  Template integer NULL  ,
+  Template varchar(200) NOT NULL ,
   Creator integer NULL  ,
   Created DATETIME NULL  ,
   LastUpdatedBy integer NULL  ,
