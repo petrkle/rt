@@ -170,7 +170,7 @@ sub Create {
         unless $condition->Id;
 
     my ( $id, $msg ) = $self->SUPER::Create(
-        Template               => $template->Id,
+        Template               => $template->Name,
         ScripCondition         => $condition->id,
         ScripAction            => $action->Id,
         Description            => $args{'Description'},
@@ -807,7 +807,7 @@ sub SetTemplate {
     return ( 0, $self->loc( "Template '[_1]' not found", $value ) )
       unless $template->Id;
 
-    return $self->_Set( Field => 'Template', Value => $template->Id );
+    return $self->_Set( Field => 'Template', Value => $template->Name );
 }
 
 1;
