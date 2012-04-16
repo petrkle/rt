@@ -31,6 +31,14 @@ ok $queue && $queue->id, 'loaded or created queue';
     is($template->Content, 'This is new template content', "We managed to _Set_ the content");
 }
 
+note "can not create template w/o Name";
+{
+    clean_templates( Queue => $queue->id );
+    my $template = RT::Template->new( RT->SystemUser );
+    my ($val,$msg) = $template->Create( Queue => $queue->id );
+    ok(!$val,$msg);
+}
+
 note "can not create template with duplicate name";
 {
     clean_templates( Queue => $queue->id );
