@@ -65,7 +65,7 @@ GetOptions(
     'with-MODPERL1',                      'with-MODPERL2',
     'with-STANDALONE',
 
-    'with-DEV',
+    'with-DEV', 'with-TESTS-DEPS',
 
     'with-GPG',
     'with-ICAL',
@@ -96,6 +96,7 @@ my %default = (
     'with-CLI' => 1,
     'with-MAILGATE' => 1, 
     'with-DEV' => @RT_DEVEL_MODE@, 
+    'with-TESTS-DEPS' => @RT_TESTS_DEPS@,
     'with-GPG' => @RT_GPG@,
     'with-ICAL' => 1,
     'with-SMTP' => 1,
@@ -276,13 +277,16 @@ Term::ReadKey
 .
 
 $deps{'DEV'} = [ text_to_hash( << '.') ];
+Module::Refresh 0.03
+.
+
+$deps{'TESTS-DEPS'} = [ text_to_hash( << '.') ];
 Email::Abstract
 Test::Email
 HTML::Form
 HTML::TokeParser
 WWW::Mechanize 1.52
 Test::WWW::Mechanize 1.30
-Module::Refresh 0.03
 Test::Expect 0.31
 XML::Simple
 File::Find

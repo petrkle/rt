@@ -265,6 +265,20 @@ else
 fi
 AC_SUBST(RT_DEVEL_MODE)
 
+dnl RT's "check tests dependencies"
+AC_ARG_WITH(tests-deps,[],RT_TESTS_DEPS=$withval,RT_TESTS_DEPS="0")
+AC_ARG_ENABLE(tests-deps,
+            AC_HELP_STRING([--enable-tests-deps],
+                           [Turn on checking of dependencies required to run RT test suit]),
+            RT_TESTS_DEPS=$enableval,
+            RT_TESTS_DEPS=$RT_TESTS_DEPS)
+if test "$RT_TESTS_DEPS" = yes; then
+        RT_TESTS_DEPS="1"
+else
+        RT_TESTS_DEPS="0"
+fi
+AC_SUBST(RT_TESTS_DEPS)
+
 dnl RT's GraphViz dependency charts
 AC_CHECK_LIB([graph],[aginitlib],RT_GRAPHVIZ="1")
 AC_ARG_WITH(graphviz,[],RT_GRAPHVIZ=$withval)
