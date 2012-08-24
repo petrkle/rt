@@ -343,6 +343,7 @@ if ($CloneTicket) {
 }
 
 my @results;
+my $checks_failure = 0;
 
 my $title = loc("Create a new ticket");
 
@@ -355,13 +356,17 @@ $m->scomp( '/Articles/Elements/SubjectOverride', ARGSRef => \%ARGS, QueueObj => 
 
 $QueueObj->Disabled && Abort(loc("Cannot create tickets in a disabled queue."));
 
-my $CFs = $QueueObj->TicketCustomFields();
-
-my $ValidCFs = $m->comp(
-    '/Elements/ValidateCustomFields',
-    CustomFields => $CFs,
-    ARGSRef => \%ARGS
-);
+{
+    my ($status, @msg) = $m->comp(
+        '/Elements/ValidateCustomFields',
+        CustomFields    => $QueueObj->TicketCustomFields,
+        ARGSRef         => \%ARGS
+    );
+    unless ($status) {
+        push @results, @msg;
+        $checks_failure = 1;
+    }
+}
 
 # deal with deleting uploaded attachments
 foreach my $key (keys %ARGS) {
@@ -388,8 +393,6 @@ if ( defined $ARGS{'Attach'} && length $ARGS{'Attach'} ) { # attachment?
 unless (keys %{$session{'Attachments'}} and $ARGS{'id'} eq 'new') {
     delete $session{'Attachments'};
 }
-
-my $checks_failure = 0;
 
 my $gnupg_widget = $m->comp('/Elements/GnuPG/SignEncryptWidget:new', Arguments => \%ARGS );
 $m->comp( '/Elements/GnuPG/SignEncryptWidget:Process',
@@ -431,17 +434,10 @@ $m->comp( '/Articles/Elements/CheckSkipCreate', ARGSRef => \%ARGS, skip_create =
               checks_failure => $checks_failure, results => \@results );
 
 if ((!exists $ARGS{'AddMoreAttach'}) and (defined($ARGS{'id'}) and $ARGS{'id'} eq 'new')) { # new ticket?
-    if ( $ValidCFs && !$checks_failure && !$skip_create ) {
+    if ( !$checks_failure && !$skip_create ) {
         $m->comp('Display.html', %ARGS);
         $RT::Logger->crit("After display call; error is $@");
         $m->abort();
-    }
-    elsif ( !$ValidCFs ) {
-        # Invalid CFs
-        while (my $CF = $CFs->Next) {
-            my $msg = $m->notes('InvalidField-' . $CF->Id) or next;
-            push @results, $CF->Name . ': ' . $msg;
-        }
     }
 }
 PageMenu->child( basics => raw_html =>  q[<a href="#basics" onclick="return switchVisibility('Ticket-Create-basics','Ticket-Create-details');">] . loc('Basics') . q[</a>]);
