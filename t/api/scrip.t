@@ -207,7 +207,7 @@ note 'basic check for disabling scrips';
     ($status, $msg) = $scrip->RemoveFromObject( $queue->id );
     ok($status, 'removed scrip from queue');
 
-    is($scrip->Disabled, undef, "not applied");
+    ok(!$scrip->Disabled, "not applied");
 }
 
 sub check_applications {
