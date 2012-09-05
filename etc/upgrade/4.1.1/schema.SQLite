@@ -31,9 +31,3 @@ CREATE UNIQUE INDEX ObjectScrips1 ON ObjectScrips (ObjectId, Scrip);
 
 # TODO: ALTER TABLE Scrips DROP COLUMN Stage;
 # TODO: ALTER TABLE Scrips DROP COLUMN Queue;
-
-ALTER TABLE ObjectCustomFields ADD COLUMN Disabled int2 NOT NULL DEFAULT 0;
-UPDATE ObjectCustomFields SET Disabled = 1 WHERE CustomField IN (
-    SELECT id FROM CustomFields WHERE Disabled != 0
-);
-# TODO: ALTER TABLE CustomFields DROP COLUMN Disabled;

@@ -1,0 +1,5 @@
+ALTER TABLE ObjectCustomFields ADD COLUMN Disabled int2 NOT NULL DEFAULT 0;
+UPDATE ObjectCustomFields SET Disabled = 1 WHERE CustomField IN (
+    SELECT id FROM CustomFields WHERE Disabled != 0
+);
+ALTER TABLE CustomFields DROP COLUMN Disabled;
