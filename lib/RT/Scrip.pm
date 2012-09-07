@@ -226,7 +226,8 @@ sub IsAdded {
     my $self = shift;
     my $record = RT::ObjectScrip->new( $self->CurrentUser );
     $record->LoadByCols( Scrip => $self->id, ObjectId => shift || 0 );
-    return $record->id;
+    return undef unless $record->id;
+    return $record;
 }
 
 sub AddedTo {
