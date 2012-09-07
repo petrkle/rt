@@ -52,17 +52,84 @@ use warnings;
 package RT::Record::ApplyAndSort;
 use base 'RT::Record';
 
+=head1 NAME
+
+RT::Record::ApplyAndSort - base class for records that can be applied and sorted
+
+=head1 DESCRIPTION
+
+Base class for L<RT::ObjectCustomField> and L<RT::ObjectScrip> that unifies
+application of L<RT::CustomField>s and L<RT::Scrip>s to various objects. Also,
+deals with order of the records.
+
+=head1 METHODS
+
+=head2 Meta information
+
+=head3 CollectionClass
+
+Returns class representing collection for this record class. Basicly adds 's'
+at the end. Should be overriden if default doesn't work.
+
+For example returns L<RT::ObjectCustomFields> when called on L<RT::ObjectCustomField>.
+
+=cut
+
 sub CollectionClass {
     return (ref($_[0]) || $_[0]).'s';
 }
 
-sub ObjectCollectionClass { die "should be subclassed" }
+=head3 TargetField
+
+Returns name of the field in the table where id of object we apply is stored.
+By default deletes everything up to '::Object' from class name.
+This method allows to use friendlier argument names and methods.
+
+For example returns 'Scrip' for L<RT::ObjectScrip>.
+
+=cut
 
 sub TargetField {
     my $class = ref($_[0]) || $_[0];
     $class =~ s/.*::Object// or return undef;
     return $class;
 }
+
+=head3 ObjectCollectionClass
+
+Takes an object under L</TargetField> name and should return class
+name representing collection the object can be applied to.
+
+Must be overriden by sub classes.
+
+See L<RT::ObjectScrip/ObjectCollectionClass> and L<RT::ObjectCustomField/CollectionClass>.
+
+=cut
+
+sub ObjectCollectionClass { die "should be subclassed" }
+
+=head2 Manipulation
+
+=head3 Create
+
+Takes 'ObjectId' with id of an object we apply to, object we apply to under L</TargetField>
+name, Disabled and SortOrder.
+
+This method doesn't create duplicates. If record already exists then it's not created, but
+loaded instead. Note that nothing is updated if record exist.
+
+If SortOrder is not defined then it's calculated to place new record last. If it's
+provided then it's caller's duty to make sure it is correct value.
+
+Example:
+
+    my $ocf = RT::ObjectCustomField->new( RT->SystemUser );
+    my ($id, $msg) = $ocf->Create( CustomField => 1, ObjectId => 0 );
+
+See L</Apply> which has more error checks. Also, L<RT::Scrip> and L<RT::CustomField>
+have more appropriate methods that B<should be> prefered over calling this directly.
+
+=cut
 
 sub Create {
     my $self = shift;
@@ -101,6 +168,15 @@ sub Create {
     );
 }
 
+=head3 Apply
+
+Helper method that wraps L</Create> and does more checks to make sure result
+is consistent. Doesn't allow to apply a record to an object if the record
+is already global. Un-applies record from particular objects when asked
+to apply the record globally.
+
+=cut
+
 sub Apply {
     my $self = shift;
     my %args = (@_);
@@ -133,97 +209,11 @@ sub Apply {
     );
 }
 
-sub IsApplied {
-    my $self = shift;
-    my ($tid, $oid) = @_;
-    my $record = $self->new( $self->CurrentUser );
-    $record->LoadByCols( $self->TargetField => $tid, ObjectId => $oid );
-    return $record->id;
-}
+=head3 Delete
 
-=head1 AppliedTo
-
-Returns collection with objects this custom field is applied to.
-Class of the collection depends on L</LookupType>.
-See all L</NotAppliedTo> .
-
-Doesn't takes into account if object is applied globally.
+Deletes this record.
 
 =cut
-
-sub AppliedTo {
-    my $self = shift;
-
-    my ($res, $alias) = $self->_AppliedTo( @_ );
-    return $res unless $res;
-
-    $res->Limit(
-        ALIAS     => $alias,
-        FIELD     => 'id',
-        OPERATOR  => 'IS NOT',
-        VALUE     => 'NULL',
-    );
-
-    return $res;
-}
-
-=head1 NotAppliedTo
-
-Returns collection with objects this custom field is not applied to.
-Class of the collection depends on L</LookupType>.
-See all L</AppliedTo> .
-
-Doesn't takes into account if object is applied globally.
-
-=cut
-
-sub NotAppliedTo {
-    my $self = shift;
-
-    my ($res, $alias) = $self->_AppliedTo( @_ );
-    return $res unless $res;
-
-    $res->Limit(
-        ALIAS     => $alias,
-        FIELD     => 'id',
-        OPERATOR  => 'IS',
-        VALUE     => 'NULL',
-    );
-
-    return $res;
-}
-
-sub _AppliedTo {
-    my $self = shift;
-    my %args = (@_);
-
-    my $field = $self->TargetField;
-    my $target = $args{ $field } || $self->TargetObj;
-
-    my ($class) = $self->ObjectCollectionClass( $field => $target );
-    return undef unless $class;
-
-    my $res = $class->new( $self->CurrentUser );
-
-    # If target applied to a Group, only display user-defined groups
-    $res->LimitToUserDefinedGroups if $class eq 'RT::Groups';
-
-    $res->OrderBy( FIELD => 'Name' );
-    my $alias = $res->Join(
-        TYPE   => 'LEFT',
-        ALIAS1 => 'main',
-        FIELD1 => 'id',
-        TABLE2 => $self->Table,
-        FIELD2 => 'ObjectId',
-    );
-    $res->Limit(
-        LEFTJOIN => $alias,
-        ALIAS    => $alias,
-        FIELD    => $field,
-        VALUE    => $target->id,
-    );
-    return ($res, $alias);
-}
 
 sub Delete {
     my $self = shift;
@@ -241,6 +231,17 @@ sub Delete {
     return $self->SUPER::Delete;
 }
 
+=head3 DeleteAll
+
+Helper method to delete all applications for one target (Scrip, CustomField, ...).
+Target can be provided in arguments. If it's not then L</TargetObj> is used.
+
+    $object_scrip->DeleteAll;
+
+    $object_scrip->DeleteAll( Scrip => $scrip );
+
+=cut
+
 sub DeleteAll {
     my $self = shift;
     my %args = (@_);
@@ -255,6 +256,12 @@ sub DeleteAll {
     $list->Limit( FIELD => $field, VALUE => $id );
     $_->Delete foreach @{ $list->ItemsArrayRef };
 }
+
+=head3 SetDisabledOnAll
+
+Like L</DeleteAll>, but changes Disabled field on all records.
+
+=cut
 
 sub SetDisabledOnAll {
     my $self = shift;
@@ -280,22 +287,17 @@ sub SetDisabledOnAll {
     return (1, $self->loc("Disabled all applications") );
 }
 
-=head2 Sorting scrips applications
-
-scrips sorted on multiple layers. First of all custom
-fields with different lookup type are sorted independently. All
-global scrips have fixed order for all objects, but you
-can insert object specific scrips between them. Object
-specific scrips can be applied to several objects and
-be on different place. For example you have GCF1, GCF2, LCF1,
-LCF2 and LCF3 that applies to tickets. You can place GCF2
-above GCF1, but they will be in the same order in all queues.
-However, LCF1 and other local can be placed at any place
-for particular queue: above global, between them or below.
+sub IsApplied {
+    my $self = shift;
+    my ($tid, $oid) = @_;
+    my $record = $self->new( $self->CurrentUser );
+    $record->LoadByCols( $self->TargetField => $tid, ObjectId => $oid );
+    return $record->id;
+}
 
 =head3 MoveUp
 
-Moves scrip up. See </Sorting scrips applications>.
+Moves record up.
 
 =cut
 
@@ -303,11 +305,17 @@ sub MoveUp { return shift->Move( Up => @_ ) }
 
 =head3 MoveDown
 
-Moves scrip down. See </Sorting scrips applications>.
+Moves record down.
 
 =cut
 
 sub MoveDown { return shift->Move( Down => @_ ) }
+
+=head3 Move
+
+Takes 'up' or 'down'. One method that implements L</MoveUp> and L</MoveDown>.
+
+=cut
 
 sub Move {
     my $self = shift;
@@ -401,6 +409,117 @@ sub Move {
     return (1,"Moved");
 }
 
+=head2 Accessors, instrospection and traversing.
+
+=head3 TargetObj
+
+Returns target object of this record. Returns L<RT::Scrip> object for
+L<RT::ObjectScrip>.
+
+=cut
+
+sub TargetObj {
+    my $self = shift;
+    my $id   = shift;
+
+    my $method = $self->TargetField .'Obj';
+    return $self->$method( $id );
+}
+
+=head3 AppliedTo
+
+Returns collection with objects target of this record is applied to.
+Class of the collection depends on L</ObjectCollectionClass>.
+See all L</NotAppliedTo>.
+
+For example returns L<RT::Queues> collection if the target is L<RT::Scrip>.
+
+Returns empty collection if target is applied globally.
+
+=cut
+
+sub AppliedTo {
+    my $self = shift;
+
+    my ($res, $alias) = $self->_AppliedTo( @_ );
+    return $res unless $res;
+
+    $res->Limit(
+        ALIAS     => $alias,
+        FIELD     => 'id',
+        OPERATOR  => 'IS NOT',
+        VALUE     => 'NULL',
+    );
+
+    return $res;
+}
+
+=head3 NotAppliedTo
+
+Returns collection with objects target of this record is not applied to.
+Class of the collection depends on L</ObjectCollectionClass>.
+See all L</AppliedTo>.
+
+Returns empty collection if target is applied globally.
+
+=cut
+
+sub NotAppliedTo {
+    my $self = shift;
+
+    my ($res, $alias) = $self->_AppliedTo( @_ );
+    return $res unless $res;
+
+    $res->Limit(
+        ALIAS     => $alias,
+        FIELD     => 'id',
+        OPERATOR  => 'IS',
+        VALUE     => 'NULL',
+    );
+
+    return $res;
+}
+
+sub _AppliedTo {
+    my $self = shift;
+    my %args = (@_);
+
+    my $field = $self->TargetField;
+    my $target = $args{ $field } || $self->TargetObj;
+
+    my ($class) = $self->ObjectCollectionClass( $field => $target );
+    return undef unless $class;
+
+    my $res = $class->new( $self->CurrentUser );
+
+    # If target applied to a Group, only display user-defined groups
+    $res->LimitToUserDefinedGroups if $class eq 'RT::Groups';
+
+    $res->OrderBy( FIELD => 'Name' );
+    my $alias = $res->Join(
+        TYPE   => 'LEFT',
+        ALIAS1 => 'main',
+        FIELD1 => 'id',
+        TABLE2 => $self->Table,
+        FIELD2 => 'ObjectId',
+    );
+    $res->Limit(
+        LEFTJOIN => $alias,
+        ALIAS    => $alias,
+        FIELD    => $field,
+        VALUE    => $target->id,
+    );
+    return ($res, $alias);
+}
+
+=head3 NextSortOrder
+
+Returns next available SortOrder value in the L<neighborhood|/Neighbors>.
+Pass arguments to L</Neighbors> and can take optional ObjectId argument,
+calls ObjectId if it's not provided.
+
+=cut
+
 sub NextSortOrder {
     my $self = shift;
     my %args = (@_);
@@ -421,6 +540,12 @@ sub NextSortOrder {
     return $first->SortOrder + 1;
 }
 
+=head3 IsSortOrderShared
+
+Returns true if this record shares SortOrder value with a L<neighbor|/Neighbors>.
+
+=cut
+
 sub IsSortOrderShared {
     my $self = shift;
     return 0 unless $self->ObjectId;
@@ -431,18 +556,81 @@ sub IsSortOrderShared {
     return $neighbors->Count;
 }
 
-sub TargetObj {
-    my $self = shift;
-    my $id   = shift;
+=head2 Neighbors and Siblings
 
-    my $method = $self->TargetField .'Obj';
-    return $self->$method( $id );
-}
+These two methods should only be understood by developers who wants
+to implement new classes of records that can be applied to other records
+and sorted.
+
+Main purpose is to maintain SortOrder values.
+
+Let's take a look at custom fields. A custom field can be created for tickets,
+queues, transactions, users... Custom fields created for tickets can
+be applied globally or to particular set of queues. Custom fields for
+tickets are neighbors. Neighbor custom fields applied to the same objects
+are siblings. Custom field applied globally is sibling to all neighbors.
+
+For scrips Stage defines neighborhood.
+
+Let's look at the three scrips in create stage S1, S2 and S3, queues Q1 and Q2 and
+G for global.
+
+    S1@Q1, S3@Q2 0
+    S2@G         1
+    S1@Q2        2
+
+Above table says that S2 is applied globally, S1 is applied to Q1 and executed
+before S2 in this queue, also S1 is applied to Q1, but exectued after S2 in this
+queue, S3 is only applied to Q2 and executed before S2 and S1.
+
+Siblings are scrips applied to an object including globally applied or only
+globally applied. In our example there are three different collection
+of siblings: (S2) - global, (S1, S2) for Q1, (S3, S2, S1) for Q2.
+
+Sort order can be shared between neighbors, but can not be shared between siblings.
+
+Here is what happens with sort order if we move S1@Q2 one position up:
+
+           S3@Q2 0
+    S1@Q1, S1@Q2 1
+    S2@G         2
+
+One position more:
+
+           S1@Q2 0
+    S1@Q1, S3@Q2 1
+    S2@G         2
+
+Hopefuly it's enough to understand how it works.
+
+Targets from different neighborhood can not be sorted against each other.
+
+=head3 Neighbors
+
+Returns collection of records of this class with all
+neighbors. By default all possible targets are neighbors.
+
+Takes the same arguments as L</Create> method. If arguments are not passed
+then uses the current record.
+
+See L</Neighbors and Siblings> for detailed description.
+
+See L<RT::ObjectCustomField/Neighbors> for example.
+
+=cut
 
 sub Neighbors {
     my $self = shift;
     return $self->CollectionClass->new( $self->CurrentUser );
 }
+
+=head3 Siblings
+
+Returns collection of records of this class with siblings.
+
+Takes the same arguments as L</Neighbors>. Siblings is subset of L</Neighbors>.
+
+=cut
 
 sub Siblings {
     my $self = shift;
