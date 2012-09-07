@@ -1321,6 +1321,20 @@ sub IsApplied {
     return $ocf;
 }
 
+=head2 IsAppliedToAny
+
+Returns true if custom field is applied to any object.
+
+=cut
+
+sub IsAppliedToAny {
+    my $self = shift;
+    my $id = shift;
+    my $ocf = RT::ObjectCustomField->new( $self->CurrentUser );
+    $ocf->LoadByCols( CustomField => $self->id );
+    return $ocf->id ? 1 : 0;
+}
+
 =head2 AddToObject OBJECT
 
 Add this custom field as a custom field for a single object, such as a queue or group.
