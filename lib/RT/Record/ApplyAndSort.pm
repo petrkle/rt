@@ -378,7 +378,7 @@ sub TargetObj {
     return $self->$method( $id );
 }
 
-=head1 AppliedTo
+=head3 AppliedTo
 
 Returns collection with objects target of this record is applied to.
 Class of the collection depends on L</ObjectCollectionClass>.
@@ -406,7 +406,7 @@ sub AppliedTo {
     return $res;
 }
 
-=head1 NotAppliedTo
+=head3 NotAppliedTo
 
 Returns collection with objects target of this record is not applied to.
 Class of the collection depends on L</ObjectCollectionClass>.

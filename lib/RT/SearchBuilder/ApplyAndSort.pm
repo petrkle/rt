@@ -160,7 +160,7 @@ sub JoinTargetToApplied {
     return $alias;
 }
 
-=head3 JoinTargetToThis
+=head2 JoinTargetToThis
 
 Joins target collection to this table using TargetField.
 
