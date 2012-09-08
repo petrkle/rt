@@ -3608,7 +3608,7 @@ sub Attachments {
     return $res;
 }
 
-=head2 Attachments
+=head2 TextAttachments
 
 Customization of L<RT::Record/TextAttachments> for tickets.
 
