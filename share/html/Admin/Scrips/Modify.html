@@ -106,8 +106,7 @@ Abort(loc("Couldn't load scrip #[_1]", $id))
     unless $scrip->id;
 
 my $disabled = $scrip->Disabled;
-my $added_to_any = 0;
-$added_to_any = 1 if defined $disabled;
+my $added_to_any = $scrip->IsAddedToAny;
 
 if ( $Update ) {
     my @attribs = qw(
