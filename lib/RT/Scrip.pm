@@ -265,7 +265,7 @@ sub AddToObject {
         )
     ;
 
-    my $tname = $self->TemplateObj->Name;
+    my $tname = $self->Template;
     my $template = RT::Template->new( $self->CurrentUser );
     $template->LoadQueueTemplate( Queue => $queue? $queue->id : 0, Name => $tname );
     $template->LoadGlobalTemplate( $tname ) if $queue && !$template->id;
