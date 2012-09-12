@@ -92,6 +92,12 @@
         Default => $CustomFieldObj->LookupType || $LookupType, &>
 </td></tr>
 
+% if ( $CustomFieldObj->id && !$CustomFieldObj->IsAppliedToAny ) {
+<tr><td></td>
+<td><i><&|/l&>Custom field is not added to any object.</&></i>
+</td></tr>
+% }
+
 <tr class="edit_validation"><td class="label"><&|/l&>Validation</&></td>
 <td><& /Widgets/ComboBox,
     Name    => 'Pattern',
@@ -130,11 +136,13 @@
 
 % $m->callback(CallbackName => 'BeforeEnabled', CustomField => $CustomFieldObj, CFvalidations => \@CFvalidations);
 
+% if ( $CustomFieldObj->id && $CustomFieldObj->IsAppliedToAny ) {
 <tr><td class="label">&nbsp;</td><td>
 <input type="hidden" class="hidden" name="SetEnabled" value="1" />
 <input type="checkbox" class="checkbox" name="Enabled" value="1" <% $EnabledChecked |n%> />
 <&|/l&>Enabled (Unchecking this box disables this custom field)</&>
 </td></tr>
+% }
 
 % $m->callback(CallbackName => 'EndOfTable', CustomField => $CustomFieldObj, CFvalidations => \@CFvalidations);
 
