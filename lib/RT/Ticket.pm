@@ -83,6 +83,12 @@ use RT::URI;
 use MIME::Entity;
 use Devel::GlobalDestruction;
 
+for my $role (qw(Requestor Cc AdminCc Owner)) {
+    RT::Ticket->RegisterRole(
+        Name            => $role,
+        EquivClasses    => ['RT::Queue'],
+    );
+}
 
 # A helper table for links mapping to make it easier
 # to build and parse links between tickets
@@ -991,7 +997,7 @@ It will return true on success and undef on failure.
 sub _CreateTicketGroups {
     my $self = shift;
     
-    foreach my $type (RT::Group->RolesOf($self)) {
+    foreach my $type ($self->Roles) {
         my $type_obj = RT::Group->new($self->CurrentUser);
         my ($id, $msg) = $type_obj->CreateRoleGroup(
             Type    => $type,
