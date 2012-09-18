@@ -723,18 +723,19 @@ Please use RT::Queue->Roles instead at @{[join '/', caller]}.
 
 =head2 IsRoleGroupType
 
+B<DEPRECATED> and will be removed in a future release. Use L</HasRole> instead.
+
 Returns whether the passed-in type is a role group type.
 
 =cut
 
 sub IsRoleGroupType {
-    my $self = shift;
-    my $type = shift;
+    RT->Logger->warn(<<"    .");
+RT::Queue->IsRoleGroupType is DEPRECATED and will be removed in a future release.
 
-    return RT::Group->ValidateRoleGroup(
-        Domain  => 'RT::Queue-Role',
-        Type    => $type,
-    );
+Please use RT::Queue->HasRole instead at @{[join '/', caller]}.
+    .
+    shift->HasRole(@_);
 }
 
 =head2 ManageableRoleGroupTypes
@@ -877,7 +878,7 @@ sub AddWatcher {
     }
 
     return ( 0, "Unknown watcher type [_1]", $args{Type} )
-        unless $self->IsRoleGroupType($args{Type});
+        unless $self->HasRole($args{Type});
 
     my ($ok, $msg) = $self->_HasModifyWatcherRight(%args);
     return ($ok, $msg) if !$ok;
@@ -1024,7 +1025,7 @@ sub DeleteWatcher {
     }
 
     return ( 0, $self->loc('Unknown watcher type [_1]', $args{Type}) )
-        unless $self->IsRoleGroupType($args{Type});
+        unless $self->HasRole($args{Type});
 
     my ($ok, $msg) = $self->_HasModifyWatcherRight(%args);
     return ($ok, $msg) if !$ok;
