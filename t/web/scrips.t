@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use RT::Test tests => 54;
+use RT::Test tests => 70;
 
 RT->Config->Set( UseTransactionBatch => 1 );
 
@@ -12,6 +12,12 @@ RT->Config->Set( UseTransactionBatch => 1 );
 # Test actions.
 # Test templates?
 # Test cleanup scripts.
+
+my $queue_g = RT::Test->load_or_create_queue( Name => 'General' );
+ok $queue_g && $queue_g->id, 'loaded or created queue';
+
+my $queue_r = RT::Test->load_or_create_queue( Name => 'Regression' );
+ok $queue_r && $queue_r->id, 'loaded or created queue';
 
 my ($baseurl, $m) = RT::Test->started_ok;
 ok $m->login, "logged in";
@@ -61,6 +67,7 @@ sub prepare_code_with_value {
             'CustomPrepareCode' => $prepare_code,
         );
         $m->click('Create');
+        $m->content_like(qr{Scrip Created});
     }
 
     my $ticket_obj = RT::Test->create_ticket(
@@ -153,11 +160,67 @@ note "check basics in scrip's admin interface";
     $m->content_contains("The new value has been set.");
 }
 
+note "check templates in scrip's admin interface";
+{
+    my $template = RT::Template->new( RT->SystemUser );
+    my ($status, $msg) = $template->Create( Queue => $queue_g->id, Name => 'foo' );
+    ok $status, 'created a template';
+
+    my @default = (
+          '',
+          'Admin Comment',
+          'Admin Correspondence',
+          'Autoreply',
+          'Blank',
+          'Correspondence',
+          'Email Digest',
+          'Error to RT owner: public key',
+          'Error: bad GnuPG data',
+          'Error: Missing dashboard',
+          'Error: no private key',
+          'Error: public key',
+          'Forward',
+          'Forward Ticket',
+          'PasswordChange',
+          'Resolved',
+          'Status Change',
+          'Transaction'
+    );
+
+    $m->follow_link_ok( { id => 'tools-config-global-scrips-create' } );
+    ok $m->form_name('CreateScrip');
+    my @templates = ($m->find_all_inputs( type => 'option', name => 'Template' ))[0]
+        ->possible_values;
+    is_deeply(\@templates, \@default);
+
+    $m->follow_link_ok( { id => 'tools-config-queues' } );
+    $m->follow_link_ok( { text => 'General' } );
+    $m->follow_link_ok( { id => 'page-scrips-create' } );
+
+    ok $m->form_name('CreateScrip');
+    my @templates = ($m->find_all_inputs( type => 'option', name => 'Template' ))[0]
+        ->possible_values;
+    is_deeply([sort @templates], [sort @default, 'foo']);
+
+note "make sure we can not apply scrip to queue without required template";
+    $m->field('Description' => 'test template');
+    $m->select('ScripCondition' => 'On Close');
+    $m->select('ScripAction' => 'Notify Ccs');
+    $m->select('Template' => 'foo');
+    $m->click('Create');
+    $m->content_contains("Scrip Created");
+
+    $m->follow_link_ok( { id => 'page-applies-to' } );
+    my ($id) = ($m->content =~ /Modify associated objects for scrip #(\d+)/);
+    $m->form_name('AddRemoveScrip');
+    $m->tick('AddScrip-'.$id, $queue_r->id);
+    $m->click('Update');
+
+    $m->content_like(qr{No template foo in queue Regression or global});
+}
+
 note "apply scrip in different stage to different queues";
 {
-    my $queue = RT::Test->load_or_create_queue( Name => 'Regression' );
-    ok $queue && $queue->id, 'loaded or created queue';
-
     $m->follow_link_ok( { id => 'tools-config-queues' } );
     $m->follow_link_ok( { text => 'General' } );
     $m->follow_link_ok( { id => 'page-scrips-create'});
@@ -176,7 +239,7 @@ note "apply scrip in different stage to different queues";
     $m->follow_link_ok({ text => 'Applies to' });
     ok $m->form_name('AddRemoveScrip');
     $m->select('Stage' => 'Batch');
-    $m->tick( "AddScrip-$sid" => $queue->id );
+    $m->tick( "AddScrip-$sid" => $queue_r->id );
     $m->click('Update');
     $m->content_contains("Object created");
 
