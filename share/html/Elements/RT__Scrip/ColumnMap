@@ -96,11 +96,10 @@ my $COLUMN_MAP = {
     Disabled => {
         title     => \'&nbsp;',
         value     => sub {
-            my $v = $_[0]->Disabled;
-            return !defined $v
-                ? $_[0]->loc('Not applied')
-                : $v ? $_[0]->loc('Disabled')
-                : $_[0]->loc('Enabled')
+            return
+                $_[0]->IsAddedToAny
+                ? ($_[0]->Disabled ? $_[0]->loc('Disabled') : $_[0]->loc('Enabled') )
+                : $_[0]->loc('Not Applied')
         },
     },
     RemoveCheckBox => {
