@@ -57,9 +57,24 @@
 <input type="checkbox" name="RemoveScrip-<% $id %>" value="0" />
 <&|/l&>check this box to remove this scrip from all objects and be able to choose specific objects.</&>
 % } else {
-<h2><% loc('Stage') %></h2>
-<& /Admin/Elements/SelectStage, Default => $Stage &>
+<h2><% loc('Basics') %></h2>
+<table>
 
+<tr>
+    <td class="label"><&|/l&>Stage</&>:</td>
+    <td class="value"><& /Admin/Elements/SelectStage, Default => $Stage &></td>
+</tr>
+<tr>
+    <td class="label">&nbsp;</td>
+    <td class="comment"><% loc("Set stage for new applications") %></td>
+</tr>
+
+<tr>
+    <td class="label"><&|/l&>Template</&>:</td>
+    <td class="value"><& Elements/SelectTemplate, Scrip => $scrip, Default => $Template &></td>
+</tr>
+
+</table>
 <h2><&|/l&>Apply globally</&></h2>
 
 <input type="checkbox" name="AddScrip-<% $id %>" value="0" />
@@ -106,6 +121,7 @@
 <%ARGS>
 $id => undef
 $Stage => undef
+$Template => ''
 $Update => 0
 </%ARGS>
 <%INIT>
@@ -115,6 +131,10 @@ $id = $scrip->id;
 
 if ( $Update ) {
     my (@results);
+    if ( $Template ) {
+        my ($status, $msg) = $scrip->SetTemplate( $Template );
+        push @results, loc('Template: [_1]', $msg);
+    }
     if ( defined (my $del = $ARGS{"RemoveScrip-$id"}) ) {
         foreach my $id ( ref $del? (@$del) : ($del) ) {
             my ($status, $msg) = $scrip->RemoveFromObject( $id );
