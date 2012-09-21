@@ -50,7 +50,7 @@ use strict;
 use warnings;
 
 package RT::ObjectScrips;
-use base 'RT::SearchBuilder::ApplyAndSort';
+use base 'RT::SearchBuilder::AddAndSort';
 
 use RT::Scrips;
 use RT::ObjectScrip;
@@ -61,7 +61,7 @@ RT::ObjectScrips - collection of RT::ObjectScrip records
 
 =head1 DESCRIPTION
 
-Collection of L<RT::ObjectScrip> records. Inherits methods from L<RT::SearchBuilder::ApplyAndSort>.
+Collection of L<RT::ObjectScrip> records. Inherits methods from L<RT::SearchBuilder::AddAndSort>.
 
 =head1 METHODS
 

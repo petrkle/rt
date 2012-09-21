@@ -169,7 +169,7 @@ sub LimitToGlobalOrObjectId {
                  ENTRYAGGREGATOR => 'OR' ) unless $global_only;
 }
 
-=head2 LimitToNotApplied
+=head2 LimitToNotAdded
 
 Takes either list of object ids or nothing. Limits collection
 to custom fields to listed objects or any corespondingly. Use
@@ -177,23 +177,23 @@ zero to mean global.
 
 =cut
 
-sub LimitToNotApplied {
+sub LimitToNotAdded {
     my $self = shift;
     return RT::ObjectCustomFields->new( $self->CurrentUser )
-        ->LimitTargetToNotApplied( $self => @_ );
+        ->LimitTargetToNotAdded( $self => @_ );
 }
 
-=head2 LimitToApplied
+=head2 LimitToAdded
 
 Limits collection to custom fields to listed objects or any corespondingly. Use
 zero to mean global.
 
 =cut
 
-sub LimitToApplied {
+sub LimitToAdded {
     my $self = shift;
     return RT::ObjectCustomFields->new( $self->CurrentUser )
-        ->LimitTargetToApplied( $self => @_ );
+        ->LimitTargetToAdded( $self => @_ );
 }
 
 =head2 LimitToGlobalOrQueue QUEUEID

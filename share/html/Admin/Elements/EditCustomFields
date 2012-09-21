@@ -160,7 +160,7 @@ $applied_cfs->ApplySortOrder;
 
 my $not_applied_cfs = RT::CustomFields->new( $session{'CurrentUser'} );
 $not_applied_cfs->LimitToLookupType($lookup);
-$not_applied_cfs->LimitToNotApplied( $id ? ($id, 0) : (0) );
+$not_applied_cfs->LimitToNotAdded( $id ? ($id, 0) : (0) );
 
 my $format = RT->Config->Get('AdminSearchResultFormat')->{'CustomFields'};
 

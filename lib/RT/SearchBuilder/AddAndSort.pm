@@ -49,17 +49,17 @@
 use strict;
 use warnings;
 
-package RT::SearchBuilder::ApplyAndSort;
+package RT::SearchBuilder::AddAndSort;
 use base 'RT::SearchBuilder';
 
 =head1 NAME
 
-RT::SearchBuilder::ApplyAndSort - base class for 'apply and sort' collections
+RT::SearchBuilder::AddAndSort - base class for 'apply and sort' collections
 
 =head1 DESCRIPTION
 
 Base class for collections where records can be applied to objects with order.
-See also L<RT::Record::ApplyAndSort>. Used by L<RT::ObjectScrips> and
+See also L<RT::Record::AddAndSort>. Used by L<RT::ObjectScrips> and
 L<RT::ObjectCustomFields>.
 
 As it's about sorting then collection is sorted by SortOrder field.
@@ -126,7 +126,7 @@ Rather than implementing a base class for targets (L<RT::Scrip>,
 L<RT::CustomField>) and its collections. This class provides
 class methods to limit target collections.
 
-=head2 LimitTargetToNotApplied
+=head2 LimitTargetToNotAdded
 
 Takes a collection object and optional list of object ids. Limits
 the collection to records not applied to listed objects or if
@@ -134,12 +134,12 @@ the list is empty then any object. Use 0 (zero) to mean global.
 
 =cut
 
-sub LimitTargetToNotApplied {
+sub LimitTargetToNotAdded {
     my $self = shift;
     my $collection = shift;
     my @ids = @_;
 
-    my $alias = $self->JoinTargetToApplied($collection => @ids);
+    my $alias = $self->JoinTargetToAdded($collection => @ids);
 
     $collection->Limit(
         ENTRYAGGREGATOR => 'AND',
@@ -151,19 +151,19 @@ sub LimitTargetToNotApplied {
     return $alias;
 }
 
-=head2 LimitTargetToApplied
+=head2 LimitTargetToAdded
 
-L</LimitTargetToNotApplied> with reverse meaning. Takes the same
+L</LimitTargetToNotAdded> with reverse meaning. Takes the same
 arguments.
 
 =cut
 
-sub LimitTargetToApplied {
+sub LimitTargetToAdded {
     my $self = shift;
     my $collection = shift;
     my @ids = @_;
 
-    my $alias = $self->JoinTargetToApplied($collection => @ids);
+    my $alias = $self->JoinTargetToAdded($collection => @ids);
 
     $collection->Limit(
         ENTRYAGGREGATOR => 'AND',
@@ -175,7 +175,7 @@ sub LimitTargetToApplied {
     return $alias;
 }
 
-=head2 JoinTargetToApplied
+=head2 JoinTargetToAdded
 
 Joins collection to this table using left join, limits joined table
 by ids if those are provided.
@@ -185,7 +185,7 @@ multiple calls.
 
 =cut
 
-sub JoinTargetToApplied {
+sub JoinTargetToAdded {
     my $self = shift;
     my $collection = shift;
     my @ids = @_;

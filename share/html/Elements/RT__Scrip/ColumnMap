@@ -99,7 +99,7 @@ my $COLUMN_MAP = {
             return
                 $_[0]->IsAddedToAny
                 ? ($_[0]->Disabled ? $_[0]->loc('Disabled') : $_[0]->loc('Enabled') )
-                : $_[0]->loc('Not Applied')
+                : $_[0]->loc('Not Added')
         },
     },
     RemoveCheckBox => {

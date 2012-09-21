@@ -49,12 +49,12 @@
 use strict;
 use warnings;
 
-package RT::Record::ApplyAndSort;
+package RT::Record::AddAndSort;
 use base 'RT::Record';
 
 =head1 NAME
 
-RT::Record::ApplyAndSort - base class for records that can be applied and sorted
+RT::Record::AddAndSort - base class for records that can be applied and sorted
 
 =head1 DESCRIPTION
 
@@ -126,7 +126,7 @@ Example:
     my $ocf = RT::ObjectCustomField->new( RT->SystemUser );
     my ($id, $msg) = $ocf->Create( CustomField => 1, ObjectId => 0 );
 
-See L</Apply> which has more error checks. Also, L<RT::Scrip> and L<RT::CustomField>
+See L</Add> which has more error checks. Also, L<RT::Scrip> and L<RT::CustomField>
 have more appropriate methods that B<should be> prefered over calling this directly.
 
 =cut
@@ -168,7 +168,7 @@ sub Create {
     );
 }
 
-=head3 Apply
+=head3 Add
 
 Helper method that wraps L</Create> and does more checks to make sure result
 is consistent. Doesn't allow to apply a record to an object if the record
@@ -177,7 +177,7 @@ to apply the record globally.
 
 =cut
 
-sub Apply {
+sub Add {
     my $self = shift;
     my %args = (@_);
 
@@ -191,14 +191,14 @@ sub Apply {
     $oid = $oid->id if ref $oid;
     $oid ||= 0;
 
-    if ( $self->IsApplied( $tid => $oid ) ) {
+    if ( $self->IsAdded( $tid => $oid ) ) {
         return ( 0, $self->loc("Is already applied to the object") );
     }
 
     if ( $oid ) {
         # applying locally
         return (0, $self->loc("Couldn't apply as it's global already") )
-            if $self->IsApplied( $tid => 0 );
+            if $self->IsAdded( $tid => 0 );
     }
     else {
         $self->DeleteAll( $field => $tid );
@@ -287,7 +287,7 @@ sub SetDisabledOnAll {
     return (1, $self->loc("Disabled all applications") );
 }
 
-sub IsApplied {
+sub IsAdded {
     my $self = shift;
     my ($tid, $oid) = @_;
     my $record = $self->new( $self->CurrentUser );
@@ -426,11 +426,11 @@ sub TargetObj {
     return $self->$method( $id );
 }
 
-=head3 AppliedTo
+=head3 AddedTo
 
 Returns collection with objects target of this record is applied to.
 Class of the collection depends on L</ObjectCollectionClass>.
-See all L</NotAppliedTo>.
+See all L</NotAddedTo>.
 
 For example returns L<RT::Queues> collection if the target is L<RT::Scrip>.
 
@@ -438,10 +438,10 @@ Returns empty collection if target is applied globally.
 
 =cut
 
-sub AppliedTo {
+sub AddedTo {
     my $self = shift;
 
-    my ($res, $alias) = $self->_AppliedTo( @_ );
+    my ($res, $alias) = $self->_AddedTo( @_ );
     return $res unless $res;
 
     $res->Limit(
@@ -454,20 +454,20 @@ sub AppliedTo {
     return $res;
 }
 
-=head3 NotAppliedTo
+=head3 NotAddedTo
 
 Returns collection with objects target of this record is not applied to.
 Class of the collection depends on L</ObjectCollectionClass>.
-See all L</AppliedTo>.
+See all L</AddedTo>.
 
 Returns empty collection if target is applied globally.
 
 =cut
 
-sub NotAppliedTo {
+sub NotAddedTo {
     my $self = shift;
 
-    my ($res, $alias) = $self->_AppliedTo( @_ );
+    my ($res, $alias) = $self->_AddedTo( @_ );
     return $res unless $res;
 
     $res->Limit(
@@ -480,7 +480,7 @@ sub NotAppliedTo {
     return $res;
 }
 
-sub _AppliedTo {
+sub _AddedTo {
     my $self = shift;
     my %args = (@_);
 

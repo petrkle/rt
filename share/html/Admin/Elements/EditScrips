@@ -73,7 +73,7 @@
 &>
 
 <h2><&|/l&>Not applied scrips</&></h2>
-% $scrips = $find_scrips->(Applied => 0);
+% $scrips = $find_scrips->(Added => 0);
 <& /Elements/CollectionList,
     Rows => 50,
     Page => 1,
@@ -111,13 +111,13 @@ if ( $id ) {
 $id ||= 0;
 
 my $find_scrips = sub {
-    my %args = (Applied => 1, @_);
+    my %args = (Added => 1, @_);
     my $scrips = RT::Scrips->new($session{'CurrentUser'});
     $scrips->LimitByStage( $args{'Stage'} )
         if $args{'Stage'};
-    my $method = $args{'Applied'}? 'LimitToAdded' : 'LimitToNotAdded';
+    my $method = $args{'Added'}? 'LimitToAdded' : 'LimitToNotAdded';
     $scrips->$method(0, $id);
-    $scrips->ApplySortOrder if $args{'Applied'};
+    $scrips->ApplySortOrder if $args{'Added'};
     return $scrips;
 };
 

@@ -873,8 +873,8 @@ sub ACLEquivalenceObjects {
 =head2 ContextObject and SetContextObject
 
 Set or get a context for this object. It can be ticket, queue or another object
-this CF applies to. Used for ACL control, for example SeeCustomField can be granted on
-queue level to allow people to see all fields applied to the queue.
+this CF be added to. Used for ACL control, for example SeeCustomField can be granted on
+queue level to allow people to see all fields added to the queue.
 
 =cut
 
@@ -942,11 +942,11 @@ sub ValidateContextObject {
     my $self = shift;
     my $object = shift;
 
-    return 1 if $self->IsApplied(0);
+    return 1 if $self->IsAdded(0);
 
     # global only custom fields don't have objects
     # that should be used as context objects.
-    return if $self->ApplyGlobally;
+    return if $self->IsOnlyGlobal;
 
     # Otherwise, make sure we weren't passed a user object that we're
     # supposed to treat as a queue.
@@ -955,7 +955,7 @@ sub ValidateContextObject {
     # Check that it is applied correctly
     my ($applied_to) = grep {ref($_) eq $self->RecordClassFromLookupType} ($object, $object->ACLEquivalenceObjects);
     return unless $applied_to;
-    return $self->IsApplied($applied_to->id);
+    return $self->IsAdded($applied_to->id);
 }
 
 
@@ -1257,54 +1257,57 @@ sub CollectionClassFromLookupType {
     return $collection_class;
 }
 
-=head1 ApplyGlobally
+=head1 IsOnlyGlobal
 
-Certain custom fields (users, groups) should only be applied globally
+Certain custom fields (users, groups) should only be added globally
 but rather than regexing in code for LookupType =~ RT::Queue, we'll codify
 the rules here.
 
 =cut
 
-sub ApplyGlobally {
+sub IsOnlyGlobal {
     my $self = shift;
 
     return ($self->LookupType =~ /^RT::(?:Group|User)/io);
 
 }
+sub ApplyGlobally { warn "DEPRECATED, use IsOnlyGlobal"; return shift->IsOnlyGlobal(@_) }
 
-=head1 AppliedTo
+=head1 AddedTo
 
 Returns collection with objects this custom field is applied to.
 Class of the collection depends on L</LookupType>.
-See all L</NotAppliedTo> .
+See all L</NotAddedTo> .
 
 Doesn't takes into account if object is applied globally.
 
 =cut
 
-sub AppliedTo {
+sub AddedTo {
     my $self = shift;
     return RT::ObjectCustomField->new( $self->CurrentUser )
-        ->AppliedTo( CustomField => $self );
+        ->AddedTo( CustomField => $self );
 }
+sub AppliedTo { warn "DEPRECATED: use AddedTo"; shift->AddedTo(@_) };
 
-=head1 NotAppliedTo
+=head1 NotAddedTo
 
 Returns collection with objects this custom field is not applied to.
 Class of the collection depends on L</LookupType>.
-See all L</AppliedTo> .
+See all L</AddedTo> .
 
 Doesn't takes into account if object is applied globally.
 
 =cut
 
-sub NotAppliedTo {
+sub NotAddedTo {
     my $self = shift;
     return RT::ObjectCustomField->new( $self->CurrentUser )
-        ->NotAppliedTo( CustomField => $self );
+        ->NotAddedTo( CustomField => $self );
 }
+sub NotAppliedTo { warn "DEPRECATED: use NotAddedTo"; shift->NotAddedTo(@_) };
 
-=head2 IsApplied
+=head2 IsAdded
 
 Takes object id and returns corresponding L<RT::ObjectCustomField>
 record if this custom field is applied to the object. Use 0 to check
@@ -1312,7 +1315,7 @@ if custom field is applied globally.
 
 =cut
 
-sub IsApplied {
+sub IsAdded {
     my $self = shift;
     my $id = shift;
     my $ocf = RT::ObjectCustomField->new( $self->CurrentUser );
@@ -1320,14 +1323,15 @@ sub IsApplied {
     return undef unless $ocf->id;
     return $ocf;
 }
+sub IsApplied { warn "DEPRECATED: use IsAdded"; shift->IsAdded(@_) };
 
-=head2 IsAppliedToAny
+=head2 IsAddedToAny
 
 Returns true if custom field is applied to any object.
 
 =cut
 
-sub IsAppliedToAny {
+sub IsAddedToAny {
     my $self = shift;
     my $id = shift;
     my $ocf = RT::ObjectCustomField->new( $self->CurrentUser );
@@ -1357,7 +1361,7 @@ sub AddToObject {
     }
 
     my $ocf = RT::ObjectCustomField->new( $self->CurrentUser );
-    my ( $oid, $msg ) = $ocf->Apply(
+    my ( $oid, $msg ) = $ocf->Add(
         CustomField => $self->id, ObjectId => $id,
     );
     return ( $oid, $msg );
@@ -1385,7 +1389,7 @@ sub RemoveFromObject {
         return ( 0, $self->loc('Permission Denied') );
     }
 
-    my $ocf = $self->IsApplied( $id );
+    my $ocf = $self->IsAdded( $id );
     unless ( $ocf ) {
         return ( 0, $self->loc("This custom field does not apply to that object") );
     }

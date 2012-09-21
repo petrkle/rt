@@ -50,20 +50,20 @@ use strict;
 use warnings;
 
 package RT::ObjectScrip;
-use base 'RT::Record::ApplyAndSort';
+use base 'RT::Record::AddAndSort';
 
 use RT::Scrip;
 use RT::ObjectScrips;
 
 =head1 NAME
 
-RT::ObjectScrip - record representing application of a scrip to a queue
+RT::ObjectScrip - record representing addition of a scrip to a queue
 
 =head1 DESCRIPTION
 
-This record is created if you want to apply a scrip to a queue or globally.
+This record is created when you add a scrip to a queue or globally.
 
-Inherits methods from L<RT::Record::ApplyAndSort>.
+Inherits methods from L<RT::Record::AddAndSort>.
 
 For most operations it's better to use methods in L<RT::Scrip>.
 
@@ -88,7 +88,7 @@ sub ObjectCollectionClass {'RT::Queues'}
 
 =head2 Create
 
-Creates a record, e.g. applies scrip to a queue or globally.
+Creates a record, e.g. adds a scrip to a queue or globally.
 
 It's better to use L<RT::Scrip/AddToObject> method instead.
 
@@ -106,13 +106,13 @@ Stage of the scrip. The same scrip can be run in different stages.
 
 =item ObjectId
 
-Id or an object this scrip should be applied to. For now it's a queue.
+Id or an object this scrip should be added to. For now it's a queue.
 Use 0 to mean globally.
 
 =item Disabled
 
-Boolean indicator whether this new application is active or not. For now
-all applications of the same Scrip should be either disabled or active.
+Boolean indicator whether this new addition is active or not. For now
+all additions of the same Scrip should be either disabled or active.
 
 =item Created, Creator, LastUpdated, LastUpdatedBy
 
@@ -153,7 +153,7 @@ sub ScripObj {
 
 =head2 Neighbors
 
-Stage splits scrips into neighborhoods. See L<RT::Record::ApplyAndSort/Neighbors and Siblings>.
+Stage splits scrips into neighborhoods. See L<RT::Record::AddAndSort/Neighbors and Siblings>.
 
 =cut
 

@@ -92,7 +92,7 @@
         Default => $CustomFieldObj->LookupType || $LookupType, &>
 </td></tr>
 
-% if ( $CustomFieldObj->id && !$CustomFieldObj->IsAppliedToAny ) {
+% if ( $CustomFieldObj->id && !$CustomFieldObj->IsAddedToAny ) {
 <tr><td></td>
 <td><i><&|/l&>Custom field is not added to any object.</&></i>
 </td></tr>
@@ -136,7 +136,7 @@
 
 % $m->callback(CallbackName => 'BeforeEnabled', CustomField => $CustomFieldObj, CFvalidations => \@CFvalidations);
 
-% if ( $CustomFieldObj->id && $CustomFieldObj->IsAppliedToAny ) {
+% if ( $CustomFieldObj->id && $CustomFieldObj->IsAddedToAny ) {
 <tr><td class="label">&nbsp;</td><td>
 <input type="hidden" class="hidden" name="SetEnabled" value="1" />
 <input type="checkbox" class="checkbox" name="Enabled" value="1" <% $EnabledChecked |n%> />
@@ -285,10 +285,10 @@ if ( $CustomFieldObj->id && $CustomFieldObj->LookupType =~ /^RT::(?:User|Group)$
     my ( $ret, $msg );
     my $object = $CustomFieldObj->RecordClassFromLookupType->new( $session{'CurrentUser'} );
 
-    if ( $CustomFieldObj->Disabled && $CustomFieldObj->IsApplied(0) ) {
+    if ( $CustomFieldObj->Disabled && $CustomFieldObj->IsAdded(0) ) {
         ( $ret, $msg ) = $CustomFieldObj->RemoveFromObject($object);
     }
-    elsif ( !$CustomFieldObj->Disabled && !$CustomFieldObj->IsApplied(0) ) {
+    elsif ( !$CustomFieldObj->Disabled && !$CustomFieldObj->IsAdded(0) ) {
         ( $ret, $msg ) = $CustomFieldObj->AddToObject($object);
     }
 
