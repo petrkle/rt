@@ -117,13 +117,13 @@ sub LimitToGlobal  {
 sub LimitToAdded {
     my $self = shift;
     return RT::ObjectScrips->new( $self->CurrentUser )
-        ->LimitTargetToApplied( $self => @_ );
+        ->LimitTargetToAdded( $self => @_ );
 }
 
 sub LimitToNotAdded {
     my $self = shift;
     return RT::ObjectScrips->new( $self->CurrentUser )
-        ->LimitTargetToNotApplied( $self => @_ );
+        ->LimitTargetToNotAdded( $self => @_ );
 }
 
 sub LimitByStage  {
@@ -142,8 +142,8 @@ sub LimitByStage  {
 
 =head2 LimitToEnabled
 
-Limits scrips to that are applied to any queue or globally
-and application is not disabled.
+Limits scrips to that are added to any queue or globally
+and it is not disabled.
 
 =cut
 

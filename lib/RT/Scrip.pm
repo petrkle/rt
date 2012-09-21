@@ -189,13 +189,13 @@ sub Create {
         $args{'Disabled'} = 1;
     }
 
-    (my $status, $msg) = RT::ObjectScrip->new( $self->CurrentUser )->Apply(
+    (my $status, $msg) = RT::ObjectScrip->new( $self->CurrentUser )->Add(
         Scrip    => $self,
         Stage    => $args{'Stage'},
         ObjectId => $args{'Queue'},
         Disabled => $args{'Disabled'},
     );
-    $RT::Logger->error( "Couldn't apply scrip: $msg" ) unless $status;
+    $RT::Logger->error( "Couldn't add scrip: $msg" ) unless $status;
 
     return ( $id, $self->loc('Scrip Created') );
 }
@@ -240,13 +240,13 @@ sub IsAddedToAny {
 sub AddedTo {
     my $self = shift;
     return RT::ObjectScrip->new( $self->CurrentUser )
-        ->AppliedTo( Scrip => $self );
+        ->AddedTo( Scrip => $self );
 }
 
 sub NotAddedTo {
     my $self = shift;
     return RT::ObjectScrip->new( $self->CurrentUser )
-        ->NotAppliedTo( Scrip => $self );
+        ->NotAddedTo( Scrip => $self );
 }
 
 sub AddToObject {
@@ -281,7 +281,7 @@ sub AddToObject {
     }
 
     my $rec = RT::ObjectScrip->new( $self->CurrentUser );
-    return $rec->Apply( %args, Scrip => $self );
+    return $rec->Add( %args, Scrip => $self );
 }
 
 sub RemoveFromObject {
@@ -303,7 +303,7 @@ sub RemoveFromObject {
 
     my $rec = RT::ObjectScrip->new( $self->CurrentUser );
     $rec->LoadByCols( Scrip => $self->id, ObjectId => $args{'ObjectId'} );
-    return (0, $self->loc('Scrip is not applied') ) unless $rec->id;
+    return (0, $self->loc('Scrip is not added') ) unless $rec->id;
     return $rec->Delete;
 }
 
@@ -379,7 +379,7 @@ sub TemplateObj {
 =head2 Stage
 
 Takes TicketObj named argument and returns scrip's stage when
-applied to ticket's queue.
+added to ticket's queue.
 
 =cut
 
