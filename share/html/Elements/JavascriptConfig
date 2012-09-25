@@ -1,0 +1,33 @@
+<%init>
+my @CurrentUser = qw(id Name EmailAddress);
+my @Config      = qw(rtname WebPath);
+
+$m->callback(
+    CallbackName    => "Keys",
+    CurrentUser     => \@CurrentUser,
+    Config          => \@Config,
+);
+</%init>
+<script>
+window.RT = {};
+
+%# We don't use JSON() here because it doesn't sufficiently escape for
+%# embedding in HTML.
+% if ($session{CurrentUser} and $session{CurrentUser}->id) {
+RT.CurrentUser = {
+% for my $attr (@CurrentUser) {
+    <% $attr |n,j %>: <% $session{CurrentUser}->$attr |n,j %>,
+% }
+    "Privileged": <% $session{CurrentUser}->Privileged ? 'true' : 'false' %>
+};
+% } else {
+RT.CurrentUser = {};
+% }
+
+RT.Config = {
+% for my $option (@Config) {
+    <% $option |n,j %>: <% RT->Config->Get($option, $session{CurrentUser}) |n,j %>,
+% }
+    "__end__": "avoids dealing with chomping the trailing comma"
+};
+</script>
