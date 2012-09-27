@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-use RT::Test tests => 8;
+use RT::Test tests => 25;
 
 use_ok('RT::Template');
 
@@ -99,6 +99,27 @@ note "changing queue of template is not implemented";
     ($val,$msg) = $template->SetQueue( $alt_queue->id );
     ok(!$val,$msg);
 }
+
+note "make sure template can not be deleted if it has scrips";
+{
+    clean_templates( Queue => $queue->id );
+    my $template = RT::Template->new( RT->SystemUser );
+    my ($val,$msg) = $template->Create( Queue => $queue->id, Name => 'Test' );
+    ok($val,$msg);
+
+    my $scrip = RT::Scrip->new( RT->SystemUser );
+    ($val,$msg) = $scrip->Create(
+        Queue => $queue->id,
+        ScripCondition => "On Create",
+        ScripAction => 'Autoreply To Requestors',
+        Template => $template->Name,
+    );
+    ok($val, $msg);
+
+    ($val, $msg) = $template->Delete;
+    ok(!$val,$msg);
+}
+
 
 {
     my $t = RT::Template->new(RT->SystemUser);
