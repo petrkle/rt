@@ -1,0 +1,22 @@
+% foreach my $group ( RT::CustomField->CustomGroups( $Object ), '' ) {
+<&| /Widgets/TitleBox,
+    title => $group? loc($group) : loc('Custom Fields'),
+    class => $css_class .' '. ($group? CSSClass("$css_class-$group") : ''),
+    hide_empty => 1,
+    %$TitleBoxARGS,
+&>
+<& ShowCustomFields, %ARGS, Object => $Object, Group => $group &>
+</&>
+% }
+<%ARGS>
+$Object
+</%ARGS>
+<%INIT>
+my $css_class = lc(ref($Object)||$Object);
+$css_class =~ s/^rt:://;
+$css_class =~ s/::/-/g;
+$css_class = CSSClass($css_class);
+$css_class .= '-info-cfs';
+
+my $TitleBoxARGS = delete $ARGS{TitleBoxARGS} || {};
+</%INIT>
