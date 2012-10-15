@@ -1,10 +1,10 @@
-% foreach my $group ( RT::CustomField->CustomGroups( $Object ), '' ) {
+% foreach my $group ( RT::CustomField->CustomGroupings( $Object ), '' ) {
 <&| /Widgets/TitleBox,
     title => $group? loc($group) : loc('Custom Fields'),
     class => $css_class .' '. ($group? CSSClass("$css_class-$group") : ''),
     hide_empty => 1,
 &>
-<& EditCustomFields, %ARGS, Object => $Object, Group => $group &>
+<& EditCustomFields, %ARGS, Object => $Object, Grouping => $group &>
 </&>
 % }
 <%ARGS>

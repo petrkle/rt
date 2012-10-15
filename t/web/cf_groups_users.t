@@ -5,7 +5,7 @@ use warnings;
 
 use RT::Test tests => 49;
 
-RT->Config->Set( 'CustomFieldGroups',
+RT->Config->Set( 'CustomFieldGroupings',
     'RT::User' => {
         Identity         => ['TestIdentity'],
         'Access control' => ['TestAccessControl'],
@@ -17,7 +17,7 @@ RT->Config->Set( 'CustomFieldGroups',
 
 my %CF;
 
-foreach my $name ( map { @$_ } values %{ RT->Config->Get('CustomFieldGroups')->{'RT::User'} } ) {
+foreach my $name ( map { @$_ } values %{ RT->Config->Get('CustomFieldGroupings')->{'RT::User'} } ) {
     my $cf = RT::CustomField->new( RT->SystemUser );
     my ($id, $msg) = $cf->Create(
         Name => $name,
