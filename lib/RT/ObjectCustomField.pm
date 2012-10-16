@@ -68,7 +68,8 @@ sub Create {
     my $self = shift;
     my %args = (@_);
     return $self->SUPER::Create(
-        map { $_ => $args{ $_ } } qw(
+         map { $_ => $args{ $_ } }
+        grep { exists $args{$_} } qw(
             CustomField ObjectId
             SortOrder Disabled
             Created Creator

@@ -128,7 +128,8 @@ sub Create {
     my %args = (@_);
     $args{'Stage'} ||= 'TransactionCreate'; #XXX: why don't we turn undef into default?
     return $self->SUPER::Create(
-        map { $_ => $args{ $_ } } qw(
+         map { $_ => $args{ $_ } }
+        grep { exists $args{$_} } qw(
             Scrip Stage ObjectId
             SortOrder Disabled
             Created Creator
