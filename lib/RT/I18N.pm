@@ -357,7 +357,7 @@ sub DecodeMIMEWordsToEncoding {
             # already.
             $enc_str = qq{"$enc_str"}
                 if $enc_str =~ /[()<>\[\]:;@\\,.]/
-                and $enc_str !~ /^".*"$/
+                and not (($enc_str =~ /^"/ or $prefix =~ /"$/) and ($enc_str =~ /"$/ or $trailing =~ /^"/))
                 and (!$field || $field =~ /^(?:To$|From$|B?Cc$|Content-)/i);
 
             $str .= $prefix . $enc_str . $trailing;
