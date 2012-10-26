@@ -211,6 +211,7 @@ foreach my $field (qw(TimeWorked TimeEstimated TimeLeft)) {
 
 
 foreach my $pair (qw(
+    Created-Started
     Created-Resolved
     Created-LastUpdated
     Starts-Started
