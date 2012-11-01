@@ -1197,7 +1197,7 @@ sub IsOnlyGlobal {
     return ($self->LookupType =~ /^RT::(?:Group|User)/io);
 
 }
-sub ApplyGlobally { warn "DEPRECATED, use IsOnlyGlobal"; return shift->IsOnlyGlobal(@_) }
+sub ApplyGlobally { Carp::carp("DEPRECATED, use IsOnlyGlobal"); return shift->IsOnlyGlobal(@_) }
 
 =head1 AddedTo
 
@@ -1214,7 +1214,7 @@ sub AddedTo {
     return RT::ObjectCustomField->new( $self->CurrentUser )
         ->AddedTo( CustomField => $self );
 }
-sub AppliedTo { warn "DEPRECATED: use AddedTo"; shift->AddedTo(@_) };
+sub AppliedTo { Carp::carp("DEPRECATED: use AddedTo"); shift->AddedTo(@_) };
 
 =head1 NotAddedTo
 
@@ -1231,7 +1231,7 @@ sub NotAddedTo {
     return RT::ObjectCustomField->new( $self->CurrentUser )
         ->NotAddedTo( CustomField => $self );
 }
-sub NotAppliedTo { warn "DEPRECATED: use NotAddedTo"; shift->NotAddedTo(@_) };
+sub NotAppliedTo { Carp::carp("DEPRECATED: use NotAddedTo"); shift->NotAddedTo(@_) };
 
 =head2 IsAdded
 
@@ -1249,7 +1249,7 @@ sub IsAdded {
     return undef unless $ocf->id;
     return $ocf;
 }
-sub IsApplied { warn "DEPRECATED: use IsAdded"; shift->IsAdded(@_) };
+sub IsApplied { Carp::carp("DEPRECATED: use IsAdded"); shift->IsAdded(@_) };
 
 =head2 IsAddedToAny
 
