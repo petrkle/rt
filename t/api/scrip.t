@@ -133,6 +133,9 @@ note 'check applications vs. templates';
         ScripAction    => 'User Defined',
         ScripCondition => 'User Defined',
         Template       => 'foo',
+        CustomIsApplicableCode  => "1;",
+        CustomPrepareCode       => "1;",
+        CustomCommitCode        => "1;",
     );
     ok($status, 'created a scrip') or diag "error: $msg";
     main->check_applications($scrip, [$queue], [0, $queue_B]);
