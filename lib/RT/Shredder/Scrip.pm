@@ -68,8 +68,16 @@ sub __DependsOn
     my $deps = $args{'Dependencies'};
     my $list = [];
 
-# No dependencies that should be deleted with record
-# Scrip actions and conditions should be exported in feature with it.
+    my $objs = RT::ObjectScrips->new( $self->CurrentUser );
+    $objs->LimitToScrip( $self->Id );
+    push @$list, $objs;
+
+    $deps->_PushDependencies(
+        BaseObject    => $self,
+        Flags         => DEPENDS_ON,
+        TargetObjects => $list,
+        Shredder      => $args{'Shredder'}
+    );
 
     return $self->SUPER::__DependsOn( %args );
 }
