@@ -431,6 +431,10 @@ sub _LinkLimit {
     my $is_null = 0;
     $is_null = 1 if !$value || $value =~ /^null$/io;
 
+    unless ($is_null) {
+        $value = RT::URI->new( $sb->CurrentUser )->CanonicalizeURI( $value );
+    }
+
     my $direction = $meta->[1] || '';
     my ($matchfield, $linkfield) = ('', '');
     if ( $direction eq 'To' ) {
@@ -454,7 +458,7 @@ sub _LinkLimit {
 
     my $is_local = 1;
     if ( $is_null ) {
-        $op = ($op =~ /^(=|IS)$/)? 'IS': 'IS NOT';
+        $op = ($op =~ /^(=|IS)$/i)? 'IS': 'IS NOT';
     }
     elsif ( $value =~ /\D/ ) {
         $is_local = 0;
@@ -934,7 +938,7 @@ sub _WatcherLimit {
     my $groups = $self->_RoleGroupsJoin( Type => $type, Class => $class, New => !$type );
 
     $self->_OpenParen;
-    if ( $op =~ /^IS(?: NOT)?$/ ) {
+    if ( $op =~ /^IS(?: NOT)?$/i ) {
         # is [not] empty case
 
         my $group_members = $self->_GroupMembersJoin( GroupsAlias => $groups );
@@ -1097,6 +1101,12 @@ sub _GroupMembersJoin {
         TABLE2          => 'CachedGroupMembers',
         FIELD2          => 'GroupId',
         ENTRYAGGREGATOR => 'AND',
+    );
+    $self->SUPER::Limit(
+        $args{'Left'} ? (LEFTJOIN => $alias) : (),
+        ALIAS => $alias,
+        FIELD => 'Disabled',
+        VALUE => 0,
     );
 
     $self->{'_sql_group_members_aliases'}{ $args{'GroupsAlias'} } = $alias
@@ -1262,12 +1272,25 @@ sub _WatcherMembershipLimit {
         FIELD2 => 'id'
     );
 
+    $self->Limit(
+        ALIAS => $groupmembers,
+        FIELD => 'Disabled',
+        VALUE => 0,
+    );
+
     $self->Join(
         ALIAS1 => $memberships,
         FIELD1 => 'MemberId',
         ALIAS2 => $users,
         FIELD2 => 'id'
     );
+
+    $self->Limit(
+        ALIAS => $memberships,
+        FIELD => 'Disabled',
+        VALUE => 0,
+    );
+
 
     $self->_CloseParen;
 
@@ -1598,6 +1621,7 @@ sub _CustomFieldLimit {
                 FIELD      => $column,
                 OPERATOR   => $op,
                 VALUE      => $value,
+                CASESENSITIVE => 0,
                 %rest
             ) );
             $self->_CloseParen;
@@ -1605,11 +1629,8 @@ sub _CustomFieldLimit {
             $self->_CloseParen;
         }
         else {
-            my $cf = RT::CustomField->new( $self->CurrentUser );
-            $cf->Load($field);
-
             # need special treatment for Date
-            if ( $cf->Type eq 'DateTime' && $op eq '=' ) {
+            if ( $cf and $cf->Type eq 'DateTime' and $op eq '=' ) {
 
                 if ( $value =~ /:/ ) {
                     # there is time speccified.
@@ -1663,6 +1684,7 @@ sub _CustomFieldLimit {
                         FIELD    => 'Content',
                         OPERATOR => $op,
                         VALUE    => $value,
+                        CASESENSITIVE => 0,
                         %rest
                     );
                 }
@@ -1689,6 +1711,7 @@ sub _CustomFieldLimit {
                         OPERATOR        => $op,
                         VALUE           => $value,
                         ENTRYAGGREGATOR => 'AND',
+                        CASESENSITIVE => 0,
                     ) );
                 }
             }
@@ -1698,6 +1721,7 @@ sub _CustomFieldLimit {
                     FIELD    => 'Content',
                     OPERATOR => $op,
                     VALUE    => $value,
+                    CASESENSITIVE => 0,
                     %rest
                 );
 
@@ -1724,6 +1748,7 @@ sub _CustomFieldLimit {
                     OPERATOR        => $op,
                     VALUE           => $value,
                     ENTRYAGGREGATOR => 'AND',
+                    CASESENSITIVE => 0,
                 ) );
                 $self->_CloseParen;
             }
@@ -1780,6 +1805,7 @@ sub _CustomFieldLimit {
                 FIELD      => $column,
                 OPERATOR   => $op,
                 VALUE      => $value,
+                CASESENSITIVE => 0,
             ) );
         }
         else {
@@ -1789,6 +1815,7 @@ sub _CustomFieldLimit {
                 FIELD      => 'Content',
                 OPERATOR   => $op,
                 VALUE      => $value,
+                CASESENSITIVE => 0,
             );
         }
         $self->_SQLLimit(
@@ -3379,7 +3406,11 @@ sub _RestrictionsToClauses {
         # here is where we store extra data, say if it's a keyword or
         # something.  (I.e. "TYPE SPECIFIC STUFF")
 
-        push @{ $clause{$realfield} }, $data;
+        if (lc $ea eq 'none') {
+            $clause{$realfield} = [ $data ];
+        } else {
+            push @{ $clause{$realfield} }, $data;
+        }
     }
     return \%clause;
 }

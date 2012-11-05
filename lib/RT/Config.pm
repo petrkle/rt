@@ -400,8 +400,8 @@ our %META = (
             Description => q|What tickets to display in the 'More about requestor' box|,                #loc
             Values      => [qw(Active Inactive All None)],
             ValuesLabel => {
-                Active   => "Show the Requestor's 10 highest priority open tickets",                  #loc
-                Inactive => "Show the Requestor's 10 highest priority closed tickets",      #loc
+                Active   => "Show the Requestor's 10 highest priority active tickets",                  #loc
+                Inactive => "Show the Requestor's 10 highest priority inactive tickets",      #loc
                 All      => "Show the Requestor's 10 highest priority tickets",      #loc
                 None     => "Show no tickets for the Requestor", #loc
             },
@@ -435,10 +435,13 @@ our %META = (
             Description => 'Date format',                            #loc
             Callback => sub { my $ret = { Values => [], ValuesLabel => {}};
                               my $date = RT::Date->new($HTML::Mason::Commands::session{'CurrentUser'});
-                              $date->Set;
+                              $date->SetToNow;
                               foreach my $value ($date->Formatters) {
                                  push @{$ret->{Values}}, $value;
-                                 $ret->{ValuesLabel}{$value} = $date->$value();
+                                 $ret->{ValuesLabel}{$value} = $date->Get(
+                                     Format     => $value,
+                                     Timezone   => 'user',
+                                 );
                               }
                               return $ret;
             },
@@ -610,6 +613,7 @@ our %META = (
             }
         }
     },
+    ReferrerWhitelist => { Type => 'ARRAY' },
     ResolveDefaultUpdateType => {
         PostLoadCheck => sub {
             my $self  = shift;
@@ -737,7 +741,7 @@ our %META = (
 
             my %seen;
             foreach my $encoding ( grep defined && length, splice @$value ) {
-                next if $seen{ $encoding }++;
+                next if $seen{ $encoding };
                 if ( $encoding eq '*' ) {
                     unshift @$value, '*';
                     next;
@@ -1218,13 +1222,19 @@ sub SetFromConfig {
             # Otherwie 5.10 goes boom. maybe we should skip any
             # reference
             next if ref($entry) eq 'SCALAR' || ref($entry) eq 'REF';
-            my $entry_ref = *{$entry}{ ref($ref) };
+
+            my $ref_type = ref($ref);
+
+            # regex/arrayref/hashref/coderef are stored in SCALAR glob
+            $ref_type = 'SCALAR' if $ref_type eq 'REF';
+
+            my $entry_ref = *{$entry}{ $ref_type };
             next unless $entry_ref;
 
             # if references are equal then we've found
             if ( $entry_ref == $ref ) {
                 $last_pack = $pack;
-                return ( $REF_SYMBOLS{ ref($ref) } || '*' ) . $pack . $k;
+                return ( $REF_SYMBOLS{ $ref_type } || '*' ) . $pack . $k;
             }
         }
         return '';

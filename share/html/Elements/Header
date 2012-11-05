@@ -57,7 +57,7 @@
     <& /Elements/Framekiller &>
 
 % if ($Refresh && $Refresh =~ /^(\d+)/ && $1 > 0) {
-%   my $URL = $m->notes->{LogoutURL}; $URL = $URL ? ";URL=$URL" : "";
+%   my $URL = $m->notes->{RefreshURL}; $URL = $URL ? ";URL=$URL" : "";
     <meta http-equiv="refresh" content="<% "$1$URL" %>" />
 % }
 
@@ -96,7 +96,7 @@
 % $m->callback( %ARGS, CallbackName => 'Head' );
 
 </head>
-  <body class="<% lc $style %>" <% $id && qq[id="comp-$id"] |n %>>
+  <body class="<% lc $style %><% RT->Config->Get("UseSideBySideLayout", $session{'CurrentUser'}) ? ' sidebyside' : '' %>" <% $id && qq[id="comp-$id"] |n %>>
 
 % if ($ShowBar) {
 <& /Elements/Logo, %ARGS &>

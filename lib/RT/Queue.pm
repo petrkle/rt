@@ -394,6 +394,7 @@ sub Create {
         FinalPriority     => 0,
         DefaultDueIn      => 0,
         Sign              => undef,
+        SignAuto          => undef,
         Encrypt           => undef,
         _RecordTransaction => 1,
         @_
@@ -436,14 +437,11 @@ sub Create {
     }
     $RT::Handle->Commit;
 
-    if ( defined $args{'Sign'} ) {
-        my ($status, $msg) = $self->SetSign( $args{'Sign'} );
-        $RT::Logger->error("Couldn't set attribute 'Sign': $msg")
-            unless $status;
-    }
-    if ( defined $args{'Encrypt'} ) {
-        my ($status, $msg) = $self->SetEncrypt( $args{'Encrypt'} );
-        $RT::Logger->error("Couldn't set attribute 'Encrypt': $msg")
+    for my $attr (qw/Sign SignAuto Encrypt/) {
+        next unless defined $args{$attr};
+        my $set = "Set" . $attr;
+        my ($status, $msg) = $self->$set( $args{$attr} );
+        $RT::Logger->error("Couldn't set attribute '$attr': $msg")
             unless $status;
     }
 
@@ -595,6 +593,32 @@ sub SetSign {
     return ($status, $self->loc('Signing disabled'));
 }
 
+sub SignAuto {
+    my $self = shift;
+    my $value = shift;
+
+    return undef unless $self->CurrentUserHasRight('SeeQueue');
+    my $attr = $self->FirstAttribute('SignAuto') or return 0;
+    return $attr->Content;
+}
+
+sub SetSignAuto {
+    my $self = shift;
+    my $value = shift;
+
+    return ( 0, $self->loc('Permission Denied') )
+        unless $self->CurrentUserHasRight('AdminQueue');
+
+    my ($status, $msg) = $self->SetAttribute(
+        Name        => 'SignAuto',
+        Description => 'Sign auto-generated outgoing messages',
+        Content     => $value,
+    );
+    return ($status, $msg) unless $status;
+    return ($status, $self->loc('Signing enabled')) if $value;
+    return ($status, $self->loc('Signing disabled'));
+}
+
 sub Encrypt {
     my $self = shift;
     my $value = shift;
@@ -692,6 +716,7 @@ sub TicketTransactionCustomFields {
 
     my $cfs = RT::CustomFields->new( $self->CurrentUser );
     if ( $self->CurrentUserHasRight('SeeQueue') ) {
+        $cfs->SetContextObject( $self );
 	$cfs->LimitToGlobalOrObjectId( $self->Id );
 	$cfs->LimitToLookupType( 'RT::Queue-RT::Ticket-RT::Transaction' );
         $cfs->ApplySortOrder;
@@ -946,7 +971,8 @@ sub _AddWatcher {
 
     if ( $group->HasMember( $principal)) {
 
-        return ( 0, $self->loc('That principal is already a [_1] for this queue', $args{'Type'}) );
+        return ( 0, $self->loc('[_1] is already a [_2] for this queue',
+                    $principal->Object->Name, $args{'Type'}) );
     }
 
 
@@ -954,7 +980,8 @@ sub _AddWatcher {
     unless ($m_id) {
         $RT::Logger->error("Failed to add ".$principal->Id." as a member of group ".$group->Id.": ".$m_msg);
 
-        return ( 0, $self->loc('Could not make that principal a [_1] for this queue', $args{'Type'}) );
+        return ( 0, $self->loc('Could not make [_1] a [_2] for this queue',
+                    $principal->Object->Name, $args{'Type'}) );
     }
     return ( 1, $self->loc("Added [_1] to members of [_2] for this queue.", $principal->Object->Name, $args{'Type'} ));
 }
@@ -1026,8 +1053,8 @@ sub DeleteWatcher {
     # see if this user is already a watcher.
 
     unless ( $group->HasMember($principal)) {
-        return ( 0,
-        $self->loc('That principal is not a [_1] for this queue', $args{'Type'}) );
+        return ( 0, $self->loc('[_1] is not a [_2] for this queue',
+            $principal->Object->Name, $args{'Type'}) );
     }
 
     my ($m_id, $m_msg) = $group->_DeleteMember($principal->Id);
@@ -1035,7 +1062,8 @@ sub DeleteWatcher {
         $RT::Logger->error("Failed to delete ".$principal->Id.
                            " as a member of group ".$group->Id.": ".$m_msg);
 
-        return ( 0,    $self->loc('Could not remove that principal as a [_1] for this queue', $args{'Type'}) );
+        return ( 0, $self->loc('Could not remove [_1] as a [_2] for this queue',
+                    $principal->Object->Name, $args{'Type'}) );
     }
 
     return ( 1, $self->loc("Removed [_1] from members of [_2] for this queue.", $principal->Object->Name, $args{'Type'} ));
@@ -1211,6 +1239,7 @@ sub _Set {
     unless ( $self->CurrentUserHasRight('AdminQueue') ) {
         return ( 0, $self->loc('Permission Denied') );
     }
+    RT->System->QueueCacheNeedsUpdate(1);
     return ( $self->SUPER::_Set(@_) );
 }
 
@@ -1249,6 +1278,17 @@ sub CurrentUserHasRight {
 
 }
 
+=head2 CurrentUserCanSee
+
+Returns true if the current user can see the queue, using SeeQueue
+
+=cut
+
+sub CurrentUserCanSee {
+    my $self = shift;
+
+    return $self->CurrentUserHasRight('SeeQueue');
+}
 
 
 =head2 HasRight

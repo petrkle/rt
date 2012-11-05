@@ -131,14 +131,14 @@ sub import {
 
     if (RT->Config->Get('DevelMode')) { require Module::Refresh; }
 
-    $class->bootstrap_db( %args );
-
     RT::InitPluginPaths();
+    RT::InitClasses();
+
+    $class->bootstrap_db( %args );
 
     __reconnect_rt()
         unless $args{nodb};
 
-    RT::InitClasses();
     RT::InitLogging();
 
     RT->Plugins;
@@ -1313,6 +1313,10 @@ sub test_app {
 
     my $app;
 
+    my $warnings = "";
+    open( my $warn_fh, ">", \$warnings );
+    local *STDERR = $warn_fh;
+
     if ($server_opt{variant} and $server_opt{variant} eq 'rt-server') {
         $app = do {
             my $file = "$RT::SbinPath/rt-server";
@@ -1330,7 +1334,8 @@ sub test_app {
     }
 
     require Plack::Middleware::Test::StashWarnings;
-    $app = Plack::Middleware::Test::StashWarnings->wrap($app);
+    my $stashwarnings = Plack::Middleware::Test::StashWarnings->new;
+    $app = $stashwarnings->wrap($app);
 
     if ($server_opt{basic_auth}) {
         require Plack::Middleware::Auth::Basic;
@@ -1342,6 +1347,10 @@ sub test_app {
             }
         );
     }
+
+    close $warn_fh;
+    $stashwarnings->add_warning( $warnings ) if $warnings;
+
     return $app;
 }
 
@@ -1404,6 +1413,8 @@ sub start_inline_server {
     # Clear out squished CSS and JS cache, since it's retained across
     # servers, since it's in-process
     RT::Interface::Web->ClearSquished;
+    require RT::Interface::Web::Request;
+    RT::Interface::Web::Request->clear_callback_cache;
 
     Test::More::ok(1, "psgi test server ok");
     $TEST_APP = $self->test_app(@_);

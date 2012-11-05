@@ -510,16 +510,38 @@ sub _Set {
     }
 
 
-    if (length($args{Value})) {
+    if (exists $args{Value}) {
         if ($args{Field} eq 'CustomIsApplicableCode' || $args{Field} eq 'CustomPrepareCode' || $args{Field} eq 'CustomCommitCode') {
             unless ( $self->CurrentUser->HasRight( Object => $RT::System,
                                                    Right  => 'ExecuteCode' ) ) {
                 return ( 0, $self->loc('Permission Denied') );
             }
         }
+        elsif ($args{Field} eq 'Queue') {
+            if ($args{Value}) {
+                # moving to another queue
+                my $queue = RT::Queue->new( $self->CurrentUser );
+                $queue->Load($args{Value});
+                unless ($queue->Id and $queue->CurrentUserHasRight('ModifyScrips')) {
+                    return ( 0, $self->loc('Permission Denied') );
+                }
+            } else {
+                # moving to global
+                unless ($self->CurrentUser->HasRight( Object => RT->System, Right => 'ModifyScrips' )) {
+                    return ( 0, $self->loc('Permission Denied') );
+                }
+            }
+        }
+        elsif ($args{Field} eq 'Template') {
+            my $template = RT::Template->new( $self->CurrentUser );
+            $template->Load($args{Value});
+            unless ($template->Id and $template->CurrentUserCanRead) {
+                return ( 0, $self->loc('Permission Denied') );
+            }
+        }
     }
 
-    return $self->__Set(@_);
+    return $self->SUPER::_Set(@_);
 }
 
 

@@ -638,6 +638,8 @@ sub __Value {
 
     my $value = $self->SUPER::__Value($field);
 
+    return undef if (!defined $value);
+
     if ( $args{'decode_utf8'} ) {
         if ( !utf8::is_utf8($value) ) {
             utf8::decode($value);
@@ -1413,8 +1415,35 @@ sub _DeleteLink {
 }
 
 
+=head1 LockForUpdate
 
+In a database transaction, gains an exclusive lock on the row, to
+prevent race conditions.  On SQLite, this is a "RESERVED" lock on the
+entire database.
 
+=cut
+
+sub LockForUpdate {
+    my $self = shift;
+
+    my $pk = $self->_PrimaryKey;
+    my $id = @_ ? $_[0] : $self->$pk;
+    $self->_expire if $self->isa("DBIx::SearchBuilder::Record::Cachable");
+    if (RT->Config->Get('DatabaseType') eq "SQLite") {
+        # SQLite does DB-level locking, upgrading the transaction to
+        # "RESERVED" on the first UPDATE/INSERT/DELETE.  Do a no-op
+        # UPDATE to force the upgade.
+        return RT->DatabaseHandle->dbh->do(
+            "UPDATE " .$self->Table.
+                " SET $pk = $pk WHERE 1 = 0");
+    } else {
+        return $self->_LoadFromSQL(
+            "SELECT * FROM ".$self->Table
+                ." WHERE $pk = ? FOR UPDATE",
+            $id,
+        );
+    }
+}
 
 =head2 _NewTransaction  PARAMHASH
 
@@ -1440,6 +1469,11 @@ sub _NewTransaction {
         SquelchMailTo => undef,
         @_
     );
+
+    my $in_txn = RT->DatabaseHandle->TransactionDepth;
+    RT->DatabaseHandle->BeginTransaction unless $in_txn;
+
+    $self->LockForUpdate;
 
     my $old_ref = $args{'OldReference'};
     my $new_ref = $args{'NewReference'};
@@ -1487,6 +1521,9 @@ sub _NewTransaction {
     if ( RT->Config->Get('UseTransactionBatch') and $transaction ) {
 	    push @{$self->{_TransactionBatch}}, $trans if $args{'CommitScrips'};
     }
+
+    RT->DatabaseHandle->Commit unless $in_txn;
+
     return ( $transaction, $msg, $trans );
 }
 
@@ -1605,7 +1642,7 @@ sub _AddCustomFieldValue {
             0,
             $self->loc(
                 "Custom field [_1] does not apply to this object",
-                $args{'Field'}
+                ref $args{'Field'} ? $args{'Field'}->id : $args{'Field'}
             )
         );
     }

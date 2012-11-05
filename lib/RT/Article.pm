@@ -102,7 +102,7 @@ sub Create {
         @_
     );
 
-    my $class = RT::Class->new($RT::SystemUser);
+    my $class = RT::Class->new( $self->CurrentUser );
     $class->Load( $args{'Class'} );
     unless ( $class->Id ) {
         return ( 0, $self->loc('Invalid Class') );
@@ -541,6 +541,17 @@ sub CurrentUserHasRight {
         )
     );
 
+}
+
+=head2 CurrentUserCanSee
+
+Returns true if the current user can see the article, using ShowArticle
+
+=cut
+
+sub CurrentUserCanSee {
+    my $self = shift;
+    return $self->CurrentUserHasRight('ShowArticle');
 }
 
 # }}}

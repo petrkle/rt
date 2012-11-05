@@ -158,6 +158,25 @@ sub EncodeJSON {
     JSON::to_json(shift, { utf8 => 1, allow_nonref => 1 });
 }
 
+sub _encode_surrogates {
+    my $uni = $_[0] - 0x10000;
+    return ($uni /  0x400 + 0xD800, $uni % 0x400 + 0xDC00);
+}
+
+sub EscapeJS {
+    my $ref = shift;
+    return unless defined $$ref;
+
+    $$ref = "'" . join('',
+                 map {
+                     chr($_) =~ /[a-zA-Z0-9]/ ? chr($_) :
+                     $_  <= 255   ? sprintf("\\x%02X", $_) :
+                     $_  <= 65535 ? sprintf("\\u%04X", $_) :
+                     sprintf("\\u%X\\u%X", _encode_surrogates($_))
+                 } unpack('U*', $$ref))
+        . "'";
+}
+
 =head2 WebCanonicalizeInfo();
 
 Different web servers set different environmental varibles. This
@@ -234,13 +253,23 @@ sub HandleRequest {
     ValidateWebConfig();
 
     DecodeARGS($ARGS);
+    local $HTML::Mason::Commands::DECODED_ARGS = $ARGS;
     PreprocessTimeUpdates($ARGS);
 
+    InitializeMenu();
     MaybeShowInstallModePage();
 
     $HTML::Mason::Commands::m->comp( '/Elements/SetupSessionCookie', %$ARGS );
     SendSessionCookie();
-    $HTML::Mason::Commands::session{'CurrentUser'} = RT::CurrentUser->new() unless _UserLoggedIn();
+
+    if ( _UserLoggedIn() ) {
+        # make user info up to date
+        $HTML::Mason::Commands::session{'CurrentUser'}
+          ->Load( $HTML::Mason::Commands::session{'CurrentUser'}->id );
+    }
+    else {
+        $HTML::Mason::Commands::session{'CurrentUser'} = RT::CurrentUser->new();
+    }
 
     # Process session-related callbacks before any auth attempts
     $HTML::Mason::Commands::m->callback( %$ARGS, CallbackName => 'Session', CallbackPage => '/autohandler' );
@@ -266,7 +295,7 @@ sub HandleRequest {
             my $m = $HTML::Mason::Commands::m;
 
             # REST urls get a special 401 response
-            if ($m->request_comp->path =~ '^/REST/\d+\.\d+/') {
+            if ($m->request_comp->path =~ m{^/REST/\d+\.\d+/}) {
                 $HTML::Mason::Commands::r->content_type("text/plain");
                 $m->error_format("text");
                 $m->out("RT/$RT::VERSION 401 Credentials required\n");
@@ -275,15 +304,17 @@ sub HandleRequest {
             }
             # Specially handle /index.html so that we get a nicer URL
             elsif ( $m->request_comp->path eq '/index.html' ) {
-                my $next = SetNextPage(RT->Config->Get('WebURL'));
+                my $next = SetNextPage($ARGS);
                 $m->comp('/NoAuth/Login.html', next => $next, actions => [$msg]);
                 $m->abort;
             }
             else {
-                TangentForLogin(results => ($msg ? LoginError($msg) : undef));
+                TangentForLogin($ARGS, results => ($msg ? LoginError($msg) : undef));
             }
         }
     }
+
+    MaybeShowInterstitialCSRFPage($ARGS);
 
     # now it applies not only to home page, but any dashboard that can be used as a workspace
     $HTML::Mason::Commands::session{'home_refresh_interval'} = $ARGS->{'HomeRefreshInterval'}
@@ -294,7 +325,7 @@ sub HandleRequest {
 
     ShowRequestedPage($ARGS);
     LogRecordedSQLStatements(RequestData => {
-        Path => $HTML::Mason::Commands::m->request_comp->path,
+        Path => $HTML::Mason::Commands::m->request_path,
     });
 
     # Process per-page final cleanup callbacks
@@ -331,7 +362,7 @@ sub LoginError {
     return $key;
 }
 
-=head2 SetNextPage [PATH]
+=head2 SetNextPage ARGSRef [PATH]
 
 Intuits and stashes the next page in the sesssion hash.  If PATH is
 specified, uses that instead of the value of L<IntuitNextPage()>.  Returns
@@ -340,26 +371,68 @@ the hash value.
 =cut
 
 sub SetNextPage {
-    my $next = shift || IntuitNextPage();
+    my $ARGS = shift;
+    my $next = $_[0] ? $_[0] : IntuitNextPage();
     my $hash = Digest::MD5::md5_hex($next . $$ . rand(1024));
+    my $page = { url => $next };
 
-    $HTML::Mason::Commands::session{'NextPage'}->{$hash} = $next;
+    # If an explicit URL was passed and we didn't IntuitNextPage, then
+    # IsPossibleCSRF below is almost certainly unrelated to the actual
+    # destination.  Currently explicit next pages aren't used in RT, but the
+    # API is available.
+    if (not $_[0] and RT->Config->Get("RestrictReferrer")) {
+        # This isn't really CSRF, but the CSRF heuristics are useful for catching
+        # requests which may have unintended side-effects.
+        my ($is_csrf, $msg, @loc) = IsPossibleCSRF($ARGS);
+        if ($is_csrf) {
+            RT->Logger->notice(
+                "Marking original destination as having side-effects before redirecting for login.\n"
+               ."Request: $next\n"
+               ."Reason: " . HTML::Mason::Commands::loc($msg, @loc)
+            );
+            $page->{'HasSideEffects'} = [$msg, @loc];
+        }
+    }
+
+    $HTML::Mason::Commands::session{'NextPage'}->{$hash} = $page;
     $HTML::Mason::Commands::session{'i'}++;
-    
-    SendSessionCookie();
     return $hash;
 }
 
+=head2 FetchNextPage HASHKEY
 
-=head2 TangentForLogin [HASH]
+Returns the stashed next page hashref for the given hash.
+
+=cut
+
+sub FetchNextPage {
+    my $hash = shift || "";
+    return $HTML::Mason::Commands::session{'NextPage'}->{$hash};
+}
+
+=head2 RemoveNextPage HASHKEY
+
+Removes the stashed next page for the given hash and returns it.
+
+=cut
+
+sub RemoveNextPage {
+    my $hash = shift || "";
+    return delete $HTML::Mason::Commands::session{'NextPage'}->{$hash};
+}
+
+=head2 TangentForLogin ARGSRef [HASH]
 
 Redirects to C</NoAuth/Login.html>, setting the value of L<IntuitNextPage> as
-the next page.  Optionally takes a hash which is dumped into query params.
+the next page.  Takes a hashref of request %ARGS as the first parameter.
+Optionally takes all other parameters as a hash which is dumped into query
+params.
 
 =cut
 
 sub TangentForLogin {
-    my $hash  = SetNextPage();
+    my $ARGS  = shift;
+    my $hash  = SetNextPage($ARGS);
     my %query = (@_, next => $hash);
     my $login = RT->Config->Get('WebURL') . 'NoAuth/Login.html?';
     $login .= $HTML::Mason::Commands::m->comp('/Elements/QueryString', %query);
@@ -374,8 +447,9 @@ calls L<TangentForLogin> with the appropriate results key.
 =cut
 
 sub TangentForLoginWithError {
-    my $key = LoginError(HTML::Mason::Commands::loc(@_));
-    TangentForLogin( results => $key );
+    my $ARGS = shift;
+    my $key  = LoginError(HTML::Mason::Commands::loc(@_));
+    TangentForLogin( $ARGS, results => $key );
 }
 
 =head2 IntuitNextPage
@@ -434,7 +508,7 @@ sub MaybeShowInstallModePage {
     my $m = $HTML::Mason::Commands::m;
     if ( $m->base_comp->path =~ RT->Config->Get('WebNoAuthRegex') ) {
         $m->call_next();
-    } elsif ( $m->request_comp->path !~ '^(/+)Install/' ) {
+    } elsif ( $m->request_comp->path !~ m{^(/+)Install/} ) {
         RT::Interface::Web::Redirect( RT->Config->Get('WebURL') . "Install/index.html" );
     } else {
         $m->call_next();
@@ -463,7 +537,6 @@ sub MaybeShowNoAuthPage {
         if $m->base_comp->path eq '/NoAuth/Login.html' and _UserLoggedIn();
 
     # If it's a noauth file, don't ask for auth.
-    SendSessionCookie();
     $m->comp( { base_comp => $m->request_comp }, $m->fetch_next, %$ARGS );
     $m->abort;
 }
@@ -490,7 +563,7 @@ sub MaybeRejectPrivateComponentRequest {
               _elements   | # mobile UI
               Widgets     |
               autohandler | # requesting this directly is suspicious
-              l           ) # loc component
+              l (_unsafe)? ) # loc component
             ( $ | / ) # trailing slash or end of path
         }xi) {
             $m->abort(403);
@@ -520,18 +593,18 @@ sub ShowRequestedPage {
 
     my $m = $HTML::Mason::Commands::m;
 
+    # Ensure that the cookie that we send is up-to-date, in case the
+    # session-id has been modified in any way
+    SendSessionCookie();
+
     # precache all system level rights for the current user
     $HTML::Mason::Commands::session{CurrentUser}->PrincipalObj->HasRights( Object => RT->System );
-
-    InitializeMenu();
-
-    SendSessionCookie();
 
     # If the user isn't privileged, they can only see SelfService
     unless ( $HTML::Mason::Commands::session{'CurrentUser'}->Privileged ) {
 
         # if the user is trying to access a ticket, redirect them
-        if ( $m->request_comp->path =~ '^(/+)Ticket/Display.html' && $ARGS->{'id'} ) {
+        if ( $m->request_comp->path =~ m{^(/+)Ticket/Display.html} && $ARGS->{'id'} ) {
             RT::Interface::Web::Redirect( RT->Config->Get('WebURL') . "SelfService/Display.html?id=" . $ARGS->{'id'} );
         }
 
@@ -572,7 +645,8 @@ sub AttemptExternalAuth {
             $user =~ s/^\Q$NodeName\E\\//i;
         }
 
-        my $next = delete $HTML::Mason::Commands::session{'NextPage'}->{$ARGS->{'next'} || ''};
+        my $next = RemoveNextPage($ARGS->{'next'});
+           $next = $next->{'url'} if ref $next;
         InstantiateNewSession() unless _UserLoggedIn;
         $HTML::Mason::Commands::session{'CurrentUser'} = RT::CurrentUser->new();
         $HTML::Mason::Commands::session{'CurrentUser'}->$load_method($user);
@@ -611,7 +685,7 @@ sub AttemptExternalAuth {
                 delete $HTML::Mason::Commands::session{'CurrentUser'};
 
                 if (RT->Config->Get('WebFallbackToInternalAuth')) {
-                    TangentForLoginWithError('Cannot create user: [_1]', $msg);
+                    TangentForLoginWithError($ARGS, 'Cannot create user: [_1]', $msg);
                 } else {
                     $m->abort();
                 }
@@ -633,14 +707,14 @@ sub AttemptExternalAuth {
             delete $HTML::Mason::Commands::session{'CurrentUser'};
             $user = $orig_user;
 
-            if ( RT->Config->Get('WebExternalOnly') ) {
-                TangentForLoginWithError('You are not an authorized user');
+            unless ( RT->Config->Get('WebFallbackToInternalAuth') ) {
+                TangentForLoginWithError($ARGS, 'You are not an authorized user');
             }
         }
     } elsif ( RT->Config->Get('WebFallbackToInternalAuth') ) {
         unless ( defined $HTML::Mason::Commands::session{'CurrentUser'} ) {
             # XXX unreachable due to prior defaulting in HandleRequest (check c34d108)
-            TangentForLoginWithError('You are not an authorized user');
+            TangentForLoginWithError($ARGS, 'You are not an authorized user');
         }
     } else {
 
@@ -671,11 +745,11 @@ sub AttemptPasswordAuthentication {
 
         # It's important to nab the next page from the session before we blow
         # the session away
-        my $next = delete $HTML::Mason::Commands::session{'NextPage'}->{$ARGS->{'next'} || ''};
+        my $next = RemoveNextPage($ARGS->{'next'});
+           $next = $next->{'url'} if ref $next;
 
         InstantiateNewSession();
         $HTML::Mason::Commands::session{'CurrentUser'} = $user_obj;
-        SendSessionCookie();
 
         $m->callback( %$ARGS, CallbackName => 'SuccessfulLogin', CallbackPage => '/autohandler' );
 
@@ -730,6 +804,7 @@ sub LoadSessionFromCookie {
 sub InstantiateNewSession {
     tied(%HTML::Mason::Commands::session)->delete if tied(%HTML::Mason::Commands::session);
     tie %HTML::Mason::Commands::session, 'RT::Interface::Web::Session', undef;
+    SendSessionCookie();
 }
 
 sub SendSessionCookie {
@@ -811,6 +886,10 @@ sub StaticFileHeaders {
     # make cache public
     $HTML::Mason::Commands::r->headers_out->{'Cache-Control'} = 'max-age=259200, public';
 
+    # remove any cookie headers -- if it is cached publicly, it
+    # shouldn't include anyone's cookie!
+    delete $HTML::Mason::Commands::r->err_headers_out->{'Set-Cookie'};
+
     # Expire things in a month.
     $date->Set( Value => time + 30 * 24 * 60 * 60 );
     $HTML::Mason::Commands::r->headers_out->{'Expires'} = $date->RFC2616;
@@ -820,6 +899,22 @@ sub StaticFileHeaders {
     # Last modified at server start time
     # $date->Set( Value => $^T );
     # $HTML::Mason::Commands::r->headers_out->{'Last-Modified'} = $date->RFC2616;
+}
+
+=head2 ComponentPathIsSafe PATH
+
+Takes C<PATH> and returns a boolean indicating that the user-specified partial
+component path is safe.
+
+Currently "safe" means that the path does not start with a dot (C<.>) and does
+not contain a slash-dot C</.>.
+
+=cut
+
+sub ComponentPathIsSafe {
+    my $self = shift;
+    my $path = shift;
+    return $path !~ m{(?:^|/)\.};
 }
 
 =head2 PathIsSafe
@@ -924,7 +1019,7 @@ sub MobileClient {
     my $self = shift;
 
 
-if (($ENV{'HTTP_USER_AGENT'} || '') =~ /(?:hiptop|Blazer|Novarra|Vagabond|SonyEricsson|Symbian|NetFront|UP.Browser|UP.Link|Windows CE|MIDP|J2ME|DoCoMo|J-PHONE|PalmOS|PalmSource|iPhone|iPod|AvantGo|Nokia|Android|WebOS|S60)/io && !$HTML::Mason::Commands::session{'NotMobile'})  {
+if (($ENV{'HTTP_USER_AGENT'} || '') =~ /(?:hiptop|Blazer|Novarra|Vagabond|SonyEricsson|Symbian|NetFront|UP.Browser|UP.Link|Windows CE|MIDP|J2ME|DoCoMo|J-PHONE|PalmOS|PalmSource|iPhone|iPod|AvantGo|Nokia|Android|WebOS|S60|Mobile)/io && !$HTML::Mason::Commands::session{'NotMobile'})  {
     return 1;
 } else {
     return undef;
@@ -1124,6 +1219,273 @@ sub ComponentRoots {
     }
     @roots = map { $_->[1] } @roots unless $args{Names};
     return @roots;
+}
+
+our %is_whitelisted_component = (
+    # The RSS feed embeds an auth token in the path, but query
+    # information for the search.  Because it's a straight-up read, in
+    # addition to embedding its own auth, it's fine.
+    '/NoAuth/rss/dhandler' => 1,
+
+    # While these can be used for denial-of-service against RT
+    # (construct a very inefficient query and trick lots of users into
+    # running them against RT) it's incredibly useful to be able to link
+    # to a search result or bookmark a result page.
+    '/Search/Results.html' => 1,
+    '/Search/Simple.html'  => 1,
+    '/m/tickets/search'     => 1,
+);
+
+# Components which are blacklisted from automatic, argument-based whitelisting.
+# These pages are not idempotent when called with just an id.
+our %is_blacklisted_component = (
+    # Takes only id and toggles bookmark state
+    '/Helpers/Toggle/TicketBookmark' => 1,
+);
+
+sub IsCompCSRFWhitelisted {
+    my $comp = shift;
+    my $ARGS = shift;
+
+    return 1 if $is_whitelisted_component{$comp};
+
+    my %args = %{ $ARGS };
+
+    # If the user specifies a *correct* user and pass then they are
+    # golden.  This acts on the presumption that external forms may
+    # hardcode a username and password -- if a malicious attacker knew
+    # both already, CSRF is the least of your problems.
+    my $AllowLoginCSRF = not RT->Config->Get('RestrictReferrerLogin');
+    if ($AllowLoginCSRF and defined($args{user}) and defined($args{pass})) {
+        my $user_obj = RT::CurrentUser->new();
+        $user_obj->Load($args{user});
+        return 1 if $user_obj->id && $user_obj->IsPassword($args{pass});
+
+        delete $args{user};
+        delete $args{pass};
+    }
+
+    # Some pages aren't idempotent even with safe args like id; blacklist
+    # them from the automatic whitelisting below.
+    return 0 if $is_blacklisted_component{$comp};
+
+    # Eliminate arguments that do not indicate an effectful request.
+    # For example, "id" is acceptable because that is how RT retrieves a
+    # record.
+    delete $args{id};
+
+    # If they have a valid results= from MaybeRedirectForResults, that's
+    # also fine.
+    delete $args{results} if $args{results}
+        and $HTML::Mason::Commands::session{"Actions"}->{$args{results}};
+
+    # The homepage refresh, which uses the Refresh header, doesn't send
+    # a referer in most browsers; whitelist the one parameter it reloads
+    # with, HomeRefreshInterval, which is safe
+    delete $args{HomeRefreshInterval};
+
+    # If there are no arguments, then it's likely to be an idempotent
+    # request, which are not susceptible to CSRF
+    return 1 if !%args;
+
+    return 0;
+}
+
+sub IsRefererCSRFWhitelisted {
+    my $referer = _NormalizeHost(shift);
+    my $base_url = _NormalizeHost(RT->Config->Get('WebBaseURL'));
+    $base_url = $base_url->host_port;
+
+    my $configs;
+    for my $config ( $base_url, RT->Config->Get('ReferrerWhitelist') ) {
+        push @$configs,$config;
+
+        my $host_port = $referer->host_port;
+        if ($config =~ /\*/) {
+            # Turn a literal * into a domain component or partial component match.
+            # Refer to http://tools.ietf.org/html/rfc2818#page-5
+            my $regex = join "[a-zA-Z0-9\-]*",
+                         map { quotemeta($_) }
+                       split /\*/, $config;
+
+            return 1 if $host_port =~ /^$regex$/i;
+        } else {
+            return 1 if $host_port eq $config;
+        }
+    }
+
+    return (0,$referer,$configs);
+}
+
+=head3 _NormalizeHost
+
+Takes a URI and creates a URI object that's been normalized
+to handle common problems such as localhost vs 127.0.0.1
+
+=cut
+
+sub _NormalizeHost {
+
+    my $uri= URI->new(shift);
+    $uri->host('127.0.0.1') if $uri->host eq 'localhost';
+
+    return $uri;
+
+}
+
+sub IsPossibleCSRF {
+    my $ARGS = shift;
+
+    # If first request on this session is to a REST endpoint, then
+    # whitelist the REST endpoints -- and explicitly deny non-REST
+    # endpoints.  We do this because using a REST cookie in a browser
+    # would open the user to CSRF attacks to the REST endpoints.
+    my $path = $HTML::Mason::Commands::r->path_info;
+    $HTML::Mason::Commands::session{'REST'} = $path =~ m{^/+REST/\d+\.\d+(/|$)}
+        unless defined $HTML::Mason::Commands::session{'REST'};
+
+    if ($HTML::Mason::Commands::session{'REST'}) {
+        return 0 if $path =~ m{^/+REST/\d+\.\d+(/|$)};
+        my $why = <<EOT;
+This login session belongs to a REST client, and cannot be used to
+access non-REST interfaces of RT for security reasons.
+EOT
+        my $details = <<EOT;
+Please log out and back in to obtain a session for normal browsing.  If
+you understand the security implications, disabling RT's CSRF protection
+will remove this restriction.
+EOT
+        chomp $details;
+        HTML::Mason::Commands::Abort( $why, Details => $details );
+    }
+
+    return 0 if IsCompCSRFWhitelisted(
+        $HTML::Mason::Commands::m->request_comp->path,
+        $ARGS
+    );
+
+    # if there is no Referer header then assume the worst
+    return (1,
+            "your browser did not supply a Referrer header", # loc
+        ) if !$ENV{HTTP_REFERER};
+
+    my ($whitelisted, $browser, $configs) = IsRefererCSRFWhitelisted($ENV{HTTP_REFERER});
+    return 0 if $whitelisted;
+
+    if ( @$configs > 1 ) {
+        return (1,
+                "the Referrer header supplied by your browser ([_1]) is not allowed by RT's configured hostname ([_2]) or whitelisted hosts ([_3])", # loc
+                $browser->host_port,
+                shift @$configs,
+                join(', ', @$configs) );
+    }
+
+    return (1,
+            "the Referrer header supplied by your browser ([_1]) is not allowed by RT's configured hostname ([_2])", # loc
+            $browser->host_port,
+            $configs->[0]);
+}
+
+sub ExpandCSRFToken {
+    my $ARGS = shift;
+
+    my $token = delete $ARGS->{CSRF_Token};
+    return unless $token;
+
+    my $data = $HTML::Mason::Commands::session{'CSRF'}{$token};
+    return unless $data;
+    return unless $data->{path} eq $HTML::Mason::Commands::r->path_info;
+
+    my $user = $HTML::Mason::Commands::session{'CurrentUser'}->UserObj;
+    return unless $user->ValidateAuthString( $data->{auth}, $token );
+
+    %{$ARGS} = %{$data->{args}};
+    $HTML::Mason::Commands::DECODED_ARGS = $ARGS;
+
+    # We explicitly stored file attachments with the request, but not in
+    # the session yet, as that would itself be an attack.  Put them into
+    # the session now, so they'll be visible.
+    if ($data->{attach}) {
+        my $filename = $data->{attach}{filename};
+        my $mime     = $data->{attach}{mime};
+        $HTML::Mason::Commands::session{'Attachments'}{$filename}
+            = $mime;
+    }
+
+    return 1;
+}
+
+sub StoreRequestToken {
+    my $ARGS = shift;
+
+    my $token = Digest::MD5::md5_hex(time . {} . $$ . rand(1024));
+    my $user = $HTML::Mason::Commands::session{'CurrentUser'}->UserObj;
+    my $data = {
+        auth => $user->GenerateAuthString( $token ),
+        path => $HTML::Mason::Commands::r->path_info,
+        args => $ARGS,
+    };
+    if ($ARGS->{Attach}) {
+        my $attachment = HTML::Mason::Commands::MakeMIMEEntity( AttachmentFieldName => 'Attach' );
+        my $file_path = delete $ARGS->{'Attach'};
+        $data->{attach} = {
+            filename => Encode::decode_utf8("$file_path"),
+            mime     => $attachment,
+        };
+    }
+
+    $HTML::Mason::Commands::session{'CSRF'}->{$token} = $data;
+    $HTML::Mason::Commands::session{'i'}++;
+    return $token;
+}
+
+sub MaybeShowInterstitialCSRFPage {
+    my $ARGS = shift;
+
+    return unless RT->Config->Get('RestrictReferrer');
+
+    # Deal with the form token provided by the interstitial, which lets
+    # browsers which never set referer headers still use RT, if
+    # painfully.  This blows values into ARGS
+    return if ExpandCSRFToken($ARGS);
+
+    my ($is_csrf, $msg, @loc) = IsPossibleCSRF($ARGS);
+    return if !$is_csrf;
+
+    $RT::Logger->notice("Possible CSRF: ".RT::CurrentUser->new->loc($msg, @loc));
+
+    my $token = StoreRequestToken($ARGS);
+    $HTML::Mason::Commands::m->comp(
+        '/Elements/CSRF',
+        OriginalURL => RT->Config->Get('WebPath') . $HTML::Mason::Commands::r->path_info,
+        Reason => HTML::Mason::Commands::loc( $msg, @loc ),
+        Token => $token,
+    );
+    # Calls abort, never gets here
+}
+
+our @POTENTIAL_PAGE_ACTIONS = (
+    qr'/Ticket/Create.html' => "create a ticket",              # loc
+    qr'/Ticket/'            => "update a ticket",              # loc
+    qr'/Admin/'             => "modify RT's configuration",    # loc
+    qr'/Approval/'          => "update an approval",           # loc
+    qr'/Articles/'          => "update an article",            # loc
+    qr'/Dashboards/'        => "modify a dashboard",           # loc
+    qr'/m/ticket/'          => "update a ticket",              # loc
+    qr'Prefs'               => "modify your preferences",      # loc
+    qr'/Search/'            => "modify or access a search",    # loc
+    qr'/SelfService/Create' => "create a ticket",              # loc
+    qr'/SelfService/'       => "update a ticket",              # loc
+);
+
+sub PotentialPageAction {
+    my $page = shift;
+    my @potentials = @POTENTIAL_PAGE_ACTIONS;
+    while (my ($pattern, $result) = splice @potentials, 0, 2) {
+        return HTML::Mason::Commands::loc($result)
+            if $page =~ $pattern;
+    }
+    return "";
 }
 
 package HTML::Mason::Commands;
@@ -1352,9 +1714,8 @@ sub CreateTicket {
         }
     }
 
-    foreach my $argument (qw(Encrypt Sign)) {
-        $MIMEObj->head->replace( "X-RT-$argument" => $ARGS{$argument} ? 1 : 0 )
-          if defined $ARGS{$argument};
+    for my $argument (qw(Encrypt Sign)) {
+        $MIMEObj->head->replace( "X-RT-$argument" => $ARGS{$argument} ? 1 : 0 );
     }
 
     my %create_args = (
@@ -1406,6 +1767,7 @@ sub CreateTicket {
             my $cfid = $1;
 
             my $cf = RT::CustomField->new( $session{'CurrentUser'} );
+            $cf->SetContextObject( $Queue );
             $cf->Load($cfid);
             unless ( $cf->id ) {
                 $RT::Logger->error( "Couldn't load custom field #" . $cfid );
@@ -1688,7 +2050,7 @@ sub MakeMIMEEntity {
     );
     my $Message = MIME::Entity->build(
         Type    => 'multipart/mixed',
-        "Message-Id" => RT::Interface::Email::GenMessageId,
+        "Message-Id" => Encode::encode_utf8( RT::Interface::Email::GenMessageId ),
         map { $_ => Encode::encode_utf8( $args{ $_} ) }
             grep defined $args{$_}, qw(Subject From Cc)
     );
@@ -2126,10 +2488,11 @@ sub ProcessTicketReminders {
 
     if ( $args->{'update-reminders'} ) {
         while ( my $reminder = $reminder_collection->Next ) {
-            if (   $reminder->Status ne 'resolved' && $args->{ 'Complete-Reminder-' . $reminder->id } ) {
+            my $resolve_status = $reminder->QueueObj->Lifecycle->ReminderStatusOnResolve;
+            if (   $reminder->Status ne $resolve_status && $args->{ 'Complete-Reminder-' . $reminder->id } ) {
                 $Ticket->Reminders->Resolve($reminder);
             }
-            elsif ( $reminder->Status eq 'resolved' && !$args->{ 'Complete-Reminder-' . $reminder->id } ) {
+            elsif ( $reminder->Status eq $resolve_status && !$args->{ 'Complete-Reminder-' . $reminder->id } ) {
                 $Ticket->Reminders->Open($reminder);
             }
 
@@ -2219,6 +2582,7 @@ sub ProcessObjectCustomFieldUpdates {
 
             foreach my $cf ( keys %{ $custom_fields_to_mod{$class}{$id} } ) {
                 my $CustomFieldObj = RT::CustomField->new( $session{'CurrentUser'} );
+                $CustomFieldObj->SetContextObject($Object);
                 $CustomFieldObj->LoadById($cf);
                 unless ( $CustomFieldObj->id ) {
                     $RT::Logger->warning("Couldn't load custom field #$cf");
@@ -2825,10 +3189,54 @@ sub ScrubHTML {
 
 =head2 _NewScrubber
 
-Returns a new L<HTML::Scrubber> object.  Override this if you insist on
-letting more HTML through.
+Returns a new L<HTML::Scrubber> object.
+
+If you need to be more lax about what HTML tags and attributes are allowed,
+create C</opt/rt4/local/lib/RT/Interface/Web_Local.pm> with something like the
+following:
+
+    package HTML::Mason::Commands;
+    # Let tables through
+    push @SCRUBBER_ALLOWED_TAGS, qw(TABLE THEAD TBODY TFOOT TR TD TH);
+    1;
 
 =cut
+
+our @SCRUBBER_ALLOWED_TAGS = qw(
+    A B U P BR I HR BR SMALL EM FONT SPAN STRONG SUB SUP STRIKE H1 H2 H3 H4 H5
+    H6 DIV UL OL LI DL DT DD PRE BLOCKQUOTE BDO
+);
+
+our %SCRUBBER_ALLOWED_ATTRIBUTES = (
+    # Match http, ftp and relative urls
+    # XXX: we also scrub format strings with this module then allow simple config options
+    href   => qr{^(?:http:|ftp:|https:|/|__Web(?:Path|BaseURL|URL)__)}i,
+    face   => 1,
+    size   => 1,
+    target => 1,
+    style  => qr{
+        ^(?:\s*
+            (?:(?:background-)?color: \s*
+                    (?:rgb\(\s* \d+, \s* \d+, \s* \d+ \s*\) |   # rgb(d,d,d)
+                       \#[a-f0-9]{3,6}                      |   # #fff or #ffffff
+                       [\w\-]+                                  # green, light-blue, etc.
+                       )                            |
+               text-align: \s* \w+                  |
+               font-size: \s* [\w.\-]+              |
+               font-family: \s* [\w\s"',.\-]+       |
+               font-weight: \s* [\w\-]+             |
+
+               # MS Office styles, which are probably fine.  If we don't, then any
+               # associated styles in the same attribute get stripped.
+               mso-[\w\-]+?: \s* [\w\s"',.\-]+
+            )\s* ;? \s*)
+         +$ # one or more of these allowed properties from here 'till sunset
+    }ix,
+    dir    => qr/^(rtl|ltr)$/i,
+    lang   => qr/^\w+(-\w+)?$/,
+);
+
+our %SCRUBBER_RULES = ();
 
 sub _NewScrubber {
     require HTML::Scrubber;
@@ -2836,39 +3244,16 @@ sub _NewScrubber {
     $scrubber->default(
         0,
         {
-            '*'    => 0,
-            id     => 1,
-            class  => 1,
-            # Match http, ftp and relative urls
-            # XXX: we also scrub format strings with this module then allow simple config options
-            href   => qr{^(?:http:|ftp:|https:|/|__Web(?:Path|BaseURL|URL)__)}i,
-            face   => 1,
-            size   => 1,
-            target => 1,
-            style  => qr{
-                ^(?:\s*
-                    (?:(?:background-)?color: \s*
-                            (?:rgb\(\s* \d+, \s* \d+, \s* \d+ \s*\) |   # rgb(d,d,d)
-                               \#[a-f0-9]{3,6}                      |   # #fff or #ffffff
-                               [\w\-]+                                  # green, light-blue, etc.
-                               )                            |
-                       text-align: \s* \w+                  |
-                       font-size: \s* [\w.\-]+              |
-                       font-family: \s* [\w\s"',.\-]+       |
-                       font-weight: \s* [\w\-]+             |
-
-                       # MS Office styles, which are probably fine.  If we don't, then any
-                       # associated styles in the same attribute get stripped.
-                       mso-[\w\-]+?: \s* [\w\s"',.\-]+
-                    )\s* ;? \s*)
-                 +$ # one or more of these allowed properties from here 'till sunset
-            }ix,
-        }
+            %SCRUBBER_ALLOWED_ATTRIBUTES,
+            '*' => 0, # require attributes be explicitly allowed
+        },
     );
     $scrubber->deny(qw[*]);
-    $scrubber->allow(
-        qw[A B U P BR I HR BR SMALL EM FONT SPAN STRONG SUB SUP STRIKE H1 H2 H3 H4 H5 H6 DIV UL OL LI DL DT DD PRE BLOCKQUOTE]
-    );
+    $scrubber->allow(@SCRUBBER_ALLOWED_TAGS);
+    $scrubber->rules(%SCRUBBER_RULES);
+
+    # Scrubbing comments is vital since IE conditional comments can contain
+    # arbitrary HTML and we'd pass it right on through.
     $scrubber->comment(0);
 
     return $scrubber;

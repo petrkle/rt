@@ -142,6 +142,10 @@ sub callback {
     }
     return @rv;
 }
+
+sub clear_callback_cache {
+    %cache = %called = ();
+}
 }
 
 =head2 request_path
@@ -163,6 +167,23 @@ sub request_path {
     return $path unless substr($path, -length("/$dh_name")) eq "/$dh_name";
     substr($path, -length $dh_name) = $self->dhandler_arg;
     return $path;
+}
+
+=head2 abort
+
+Logs any recorded SQL statements for this request before calling the standard
+abort.
+
+=cut
+
+sub abort {
+    my $self = shift;
+    RT::Interface::Web::LogRecordedSQLStatements(
+        RequestData => {
+            Path => $self->request_path,
+        },
+    );
+    return $self->SUPER::abort(@_);
 }
 
 1;

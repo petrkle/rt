@@ -351,6 +351,8 @@ sub CastObjectsToRecords
     } elsif ( UNIVERSAL::isa( $targets, 'SCALAR' ) || !ref $targets ) {
         $targets = $$targets if ref $targets;
         my ($class, $id) = split /-/, $targets;
+        RT::Shredder::Exception->throw( "Unsupported class $class" )
+              unless $class =~ /^\w+(::\w+)*$/;
         $class = 'RT::'. $class unless $class =~ /^RTx?::/i;
         eval "require $class";
         die "Couldn't load '$class' module" if $@;
@@ -537,9 +539,9 @@ sub WipeoutAll
 {
     my $self = $_[0];
 
-    while ( my ($k, $v) = each %{ $self->{'cache'} } ) {
-        next if $v->{'State'} & (WIPED | IN_WIPING);
-        $self->Wipeout( Object => $v->{'Object'} );
+    foreach my $cache_val ( values %{ $self->{'cache'} } ) {
+        next if $cache_val->{'State'} & (WIPED | IN_WIPING);
+        $self->Wipeout( Object => $cache_val->{'Object'} );
     }
 }
 

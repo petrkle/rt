@@ -1058,7 +1058,7 @@ sub AddWatcher {
         return (0, $self->loc("Couldn't parse address from '[_1]' string", $args{'Email'} ))
             unless $addr;
 
-        if ( lc $self->CurrentUser->UserObj->EmailAddress
+        if ( lc $self->CurrentUser->EmailAddress
             eq lc RT::User->CanonicalizeEmailAddress( $addr->address ) )
         {
             $args{'PrincipalId'} = $self->CurrentUser->id;
@@ -1140,7 +1140,8 @@ sub _AddWatcher {
 
     if ( $group->HasMember( $principal)) {
 
-        return ( 0, $self->loc('That principal is already a [_1] for this ticket', $self->loc($args{'Type'})) );
+        return ( 0, $self->loc('[_1] is already a [_2] for this ticket',
+                    $principal->Object->Name, $self->loc($args{'Type'})) );
     }
 
 
@@ -1149,7 +1150,8 @@ sub _AddWatcher {
     unless ($m_id) {
         $RT::Logger->error("Failed to add ".$principal->Id." as a member of group ".$group->Id.": ".$m_msg);
 
-        return ( 0, $self->loc('Could not make that principal a [_1] for this ticket', $self->loc($args{'Type'})) );
+        return ( 0, $self->loc('Could not make [_1] a [_2] for this ticket',
+                    $principal->Object->Name, $self->loc($args{'Type'})) );
     }
 
     unless ( $args{'Silent'} ) {
@@ -1160,7 +1162,8 @@ sub _AddWatcher {
         );
     }
 
-        return ( 1, $self->loc('Added principal as a [_1] for this ticket', $self->loc($args{'Type'})) );
+    return ( 1, $self->loc('Added [_1] as a [_2] for this ticket',
+                $principal->Object->Name, $self->loc($args{'Type'})) );
 }
 
 
@@ -1239,7 +1242,7 @@ sub DeleteWatcher {
             }
         }
         else {
-            $RT::Logger->warn("$self -> DeleteWatcher got passed a bogus type");
+            $RT::Logger->warning("$self -> DeleteWatcher got passed a bogus type");
             return ( 0,
                      $self->loc('Error in parameters to Ticket->DeleteWatcher') );
         }
@@ -1259,8 +1262,8 @@ sub DeleteWatcher {
 
     unless ( $group->HasMember($principal) ) {
         return ( 0,
-                 $self->loc( 'That principal is not a [_1] for this ticket',
-                             $args{'Type'} ) );
+                 $self->loc( '[_1] is not a [_2] for this ticket',
+                             $principal->Object->Name, $args{'Type'} ) );
     }
 
     my ( $m_id, $m_msg ) = $group->_DeleteMember( $principal->Id );
@@ -1273,8 +1276,8 @@ sub DeleteWatcher {
 
         return (0,
                 $self->loc(
-                    'Could not remove that principal as a [_1] for this ticket',
-                    $args{'Type'} ) );
+                    'Could not remove [_1] as a [_2] for this ticket',
+                    $principal->Object->Name, $args{'Type'} ) );
     }
 
     unless ( $args{'Silent'} ) {
@@ -1910,6 +1913,31 @@ sub FirstActiveStatus {
     return $next;
 }
 
+=head2 FirstInactiveStatus
+
+Returns the first inactive status that the ticket could transition to,
+according to its current Queue's lifecycle.  May return undef if there
+is no such possible status to transition to, or we are already in it.
+This is used in resolve action in UnsafeEmailCommands, for instance.
+
+=cut
+
+sub FirstInactiveStatus {
+    my $self = shift;
+
+    my $lifecycle = $self->QueueObj->Lifecycle;
+    my $status = $self->Status;
+    my @inactive = $lifecycle->Inactive;
+    # no change if no inactive statuses in the lifecycle
+    return undef unless @inactive;
+
+    # no change if the ticket is already has first status from the list of inactive
+    return undef if lc $status eq lc $inactive[0];
+
+    my ($next) = grep $lifecycle->IsInactive($_), $lifecycle->Transitions($status);
+    return $next;
+}
+
 =head2 SetStarted
 
 Takes a date in ISO format or undef
@@ -2095,14 +2123,16 @@ sub Comment {
     }
     $args{'NoteType'} = 'Comment';
 
+    $RT::Handle->BeginTransaction();
     if ($args{'DryRun'}) {
-        $RT::Handle->BeginTransaction();
         $args{'CommitScrips'} = 0;
     }
 
     my @results = $self->_RecordNote(%args);
     if ($args{'DryRun'}) {
         $RT::Handle->Rollback();
+    } else {
+        $RT::Handle->Commit();
     }
 
     return(@results);
@@ -2141,10 +2171,10 @@ sub Correspond {
              or ( $self->CurrentUserHasRight('ModifyTicket') ) ) {
         return ( 0, $self->loc("Permission Denied"), undef );
     }
+    $args{'NoteType'} = 'Correspond';
 
-    $args{'NoteType'} = 'Correspond'; 
+    $RT::Handle->BeginTransaction();
     if ($args{'DryRun'}) {
-        $RT::Handle->BeginTransaction();
         $args{'CommitScrips'} = 0;
     }
 
@@ -2161,6 +2191,8 @@ sub Correspond {
 
     if ($args{'DryRun'}) {
         $RT::Handle->Rollback();
+    } else {
+        $RT::Handle->Commit();
     }
 
     return (@results);
@@ -2235,7 +2267,9 @@ sub _RecordNote {
     my $msgid = $args{'MIMEObj'}->head->get('Message-ID');
     unless (defined $msgid && $msgid =~ /<(rt-.*?-\d+-\d+)\.(\d+-0-0)\@\Q$org\E>/) {
         $args{'MIMEObj'}->head->set(
-            'RT-Message-ID' => RT::Interface::Email::GenMessageId( Ticket => $self )
+            'RT-Message-ID' => Encode::encode_utf8(
+                RT::Interface::Email::GenMessageId( Ticket => $self )
+            )
         );
     }
 
@@ -2357,7 +2391,7 @@ sub _Links {
     my $links = $self->{ $cache_key }
               = RT::Links->new( $self->CurrentUser );
     unless ( $self->CurrentUserHasRight('ShowTicket') ) {
-        $links->Limit( FIELD => 'id', VALUE => 0 );
+        $links->Limit( FIELD => 'id', VALUE => 0, SUBCLAUSE => 'acl' );
         return $links;
     }
 
@@ -3257,6 +3291,28 @@ sub SeenUpTo {
     return $txns->First;
 }
 
+=head2 RanTransactionBatch
+
+Acts as a guard around running TransactionBatch scrips.
+
+Should be false until you enter the code that runs TransactionBatch scrips
+
+Accepts an optional argument to indicate that TransactionBatch Scrips should no longer be run on this object.
+
+=cut
+
+sub RanTransactionBatch {
+    my $self = shift;
+    my $val = shift;
+
+    if ( defined $val ) {
+        return $self->{_RanTransactionBatch} = $val;
+    } else {
+        return $self->{_RanTransactionBatch};
+    }
+
+}
+
 
 =head2 TransactionBatch
 
@@ -3293,6 +3349,22 @@ sub ApplyTransactionBatch {
 
 sub _ApplyTransactionBatch {
     my $self = shift;
+
+    return if $self->RanTransactionBatch;
+    $self->RanTransactionBatch(1);
+
+    my $still_exists = RT::Ticket->new( RT->SystemUser );
+    $still_exists->Load( $self->Id );
+    if (not $still_exists->Id) {
+        # The ticket has been removed from the database, but we still
+        # have pending TransactionBatch txns for it.  Unfortunately,
+        # because it isn't in the DB anymore, attempting to run scrips
+        # on it may produce unpredictable results; simply drop the
+        # batched transactions.
+        $RT::Logger->warning("TransactionBatch was fired on a ticket that no longer exists; unable to run scrips!  Call ->ApplyTransactionBatch before shredding the ticket, for consistent results.");
+        return;
+    }
+
     my $batch = $self->TransactionBatch;
 
     my %seen;
@@ -3340,10 +3412,7 @@ sub DESTROY {
         return;
     }
 
-    my $batch = $self->TransactionBatch;
-    return unless $batch && @$batch;
-
-    return $self->_ApplyTransactionBatch;
+    return $self->ApplyTransactionBatch;
 }
 
 
@@ -3429,6 +3498,9 @@ sub _Set {
                                                OldValue  => $Old,
                                                TimeTaken => $args{'TimeTaken'},
         );
+        # Ensure that we can read the transaction, even if the change
+        # just made the ticket unreadable to us
+        $TransObj->{ _object_is_readable } = 1;
         return ( $Trans, scalar $TransObj->BriefDescription );
     }
     else {
@@ -3513,6 +3585,16 @@ sub CurrentUserHasRight {
 }
 
 
+=head2 CurrentUserCanSee
+
+Returns true if the current user can see the ticket, using ShowTicket
+
+=cut
+
+sub CurrentUserCanSee {
+    my $self = shift;
+    return $self->CurrentUserHasRight('ShowTicket');
+}
 
 =head2 HasRight
 
@@ -3625,7 +3707,9 @@ sub Transactions {
 
 sub TransactionCustomFields {
     my $self = shift;
-    return $self->QueueObj->TicketTransactionCustomFields;
+    my $cfs = $self->QueueObj->TicketTransactionCustomFields;
+    $cfs->SetContextObject( $self );
+    return $cfs;
 }
 
 

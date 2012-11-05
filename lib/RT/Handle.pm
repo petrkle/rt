@@ -226,14 +226,12 @@ sub CheckIntegrity {
     my $self = shift;
     $self = new $self unless ref $self;
 
-    do {
+    unless ($RT::Handle and $RT::Handle->dbh) {
         local $@;
         unless ( eval { RT::ConnectToDatabase(); 1 } ) {
             return (0, 'no connection', "$@");
         }
-    };
-
-    RT::InitLogging();
+    }
 
     require RT::CurrentUser;
     my $test_user = RT::CurrentUser->new;
@@ -860,26 +858,28 @@ sub InsertData {
                 @queues = @{ delete $item->{'Queue'} };
             }
 
+            if ( $item->{'BasedOn'} ) {
+                if ( $item->{'LookupType'} ) {
+                    my $basedon = RT::CustomField->new($RT::SystemUser);
+                    my ($ok, $msg ) = $basedon->LoadByCols( Name => $item->{'BasedOn'},
+                                                            LookupType => $item->{'LookupType'} );
+                    if ($ok) {
+                        $item->{'BasedOn'} = $basedon->Id;
+                    } else {
+                        $RT::Logger->error("Unable to load $item->{BasedOn} as a $item->{LookupType} CF.  Skipping BasedOn: $msg");
+                        delete $item->{'BasedOn'};
+                    }
+                } else {
+                    $RT::Logger->error("Unable to load CF $item->{BasedOn} because no LookupType was specified.  Skipping BasedOn");
+                    delete $item->{'BasedOn'};
+                }
+
+            } 
+
             my ( $return, $msg ) = $new_entry->Create(%$item);
             unless( $return ) {
                 $RT::Logger->error( $msg );
                 next;
-            }
-
-            if ( $item->{'BasedOn'} ) {
-                my $basedon = RT::CustomField->new($RT::SystemUser);
-                my ($ok, $msg ) = $basedon->LoadByCols( Name => $item->{'BasedOn'},
-                                                        LookupType => $new_entry->LookupType );
-                if ($ok) {
-                    ($ok, $msg) = $new_entry->SetBasedOn( $basedon );
-                    if ($ok) {
-                        $RT::Logger->debug("Added BasedOn $item->{BasedOn}: $msg");
-                    } else {
-                        $RT::Logger->error("Failed to add basedOn $item->{BasedOn}: $msg");
-                    }
-                } else {
-                    $RT::Logger->error("Unable to load $item->{BasedOn} as a $item->{LookupType} CF.  Skipping BasedOn");
-                }
             }
 
             foreach my $value ( @{$values} ) {

@@ -52,6 +52,8 @@
 <& /Elements/Tabs &>
 % }
 
+<& /Elements/ListActions, actions => $Actions &>
+
 <div class="error">
 <%$Why%>
 <br />
@@ -64,6 +66,7 @@ $m->abort();
 </%cleanup>
 
 <%args>
+$Actions => []
 $Code => undef
 $Details => ''
 $Title => loc("RT Error")
@@ -81,7 +84,7 @@ Encode::_utf8_off($error);
 
 $RT::Logger->error($error);
 
-if ( defined $session{'SessionType'} && $session{'SessionType'} eq 'REST' ) {
+if ( $session{'REST'} ) {
     $r->content_type('text/plain');
     $m->out( "Error: " . $Why . "\n" );
     $m->out( $Details . "\n" ) if defined $Details && length $Details;

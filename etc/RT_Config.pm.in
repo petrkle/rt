@@ -347,7 +347,8 @@ Set($StoreLoops, undef);
 =item C<$MaxAttachmentSize>
 
 C<$MaxAttachmentSize> sets the maximum size (in bytes) of attachments
-stored in the database.
+stored in the database.  This setting is irrelevant unless one of
+$TruncateLongAttachments or $DropLongAttachments (below) are set.
 
 =cut
 
@@ -615,6 +616,9 @@ Set($NotifyActor, 0);
 By default, RT records each message it sends out to its own internal
 database.  To change this behavior, set C<$RecordOutgoingEmail> to 0
 
+If this is disabled, users' digest mail delivery preferences
+(i.e. EmailFrequency) will also be ignored.
+
 =cut
 
 Set($RecordOutgoingEmail, 1);
@@ -859,14 +863,16 @@ Set($CanonicalizeRedirectURLs, 0);
 A list of JavaScript files to be included in head.  Removing any of
 the default entries is not suggested.
 
+If you're a plugin author, refer to RT->AddJavaScript.
+
 =cut
 
 Set(@JSFiles, qw/
     jquery-1.4.2.min.js
     jquery_noconflict.js
     jquery-ui-1.8.4.custom.min.js
+    jquery-ui-timepicker-addon.js
     jquery-ui-patch-datepicker.js
-    ui.timepickr.js
     titlebox-state.js
     util.js
     userautocomplete.js
@@ -894,6 +900,8 @@ directory, or from http://www.crockford.com/javascript/jsmin.html
 =item C<@CSSFiles>
 
 A list of additional CSS files to be included in head.
+
+If you're a plugin author, refer to RT->AddStyleSheets.
 
 =cut
 
@@ -1727,11 +1735,11 @@ Set($ForceApprovalsView, 0);
 
 =head1 Extra security
 
-=over 4
-
 This is a list of extra security measures to enable that help keep your RT
 safe.  If you don't know what these mean, you should almost certainly leave the
 defaults alone.
+
+=over 4
 
 =item C<$DisallowExecuteCode>
 
@@ -1754,7 +1762,59 @@ This disables RT's clickjacking protection.
 
 Set($Framebusting, 1);
 
+=item C<$RestrictReferrer>
+
+If set to a false value, the HTTP C<Referer> (sic) header will not be
+checked to ensure that requests come from RT's own domain.  As RT allows
+for GET requests to alter state, disabling this opens RT up to
+cross-site request forgery (CSRF) attacks.
+
+=cut
+
+Set($RestrictReferrer, 1);
+
+=item C<$RestrictLoginReferrer>
+
+If set to a false value, RT will allow the user to log in from any link
+or request, merely by passing in C<user> and C<pass> parameters; setting
+it to a true value forces all logins to come from the login box, so the
+user is aware that they are being logged in.  The default is off, for
+backwards compatability.
+
+=cut
+
+Set($RestrictLoginReferrer, 0);
+
+=item C<@ReferrerWhitelist>
+
+This is a list of hostname:port combinations that RT will treat as being
+part of RT's domain. This is particularly useful if you access RT as
+multiple hostnames or have an external auth system that needs to
+redirect back to RT once authentication is complete.
+
+ Set(@ReferrerWhitelist, qw(www.example.com:443  www3.example.com:80));
+
+If the "RT has detected a possible cross-site request forgery" error is triggered
+by a host:port sent by your browser that you believe should be valid, you can copy
+the host:port from the error message into this list.
+
+Simple wildcards, similar to SSL certificates, are allowed.  For example:
+
+    *.example.com:80    # matches foo.example.com
+                        # but not example.com
+                        #      or foo.bar.example.com
+
+    www*.example.com:80 # matches www3.example.com
+                        #     and www-test.example.com
+                        #     and www.example.com
+
+=cut
+
+Set(@ReferrerWhitelist, qw());
+
 =back
+
+
 
 =head1 Authorization and user configuration
 
@@ -2160,6 +2220,14 @@ be changed to this value.
 When an approval is denied, the status of depending tickets will
 be changed to this value.
 
+=item reminder_on_open
+
+When a reminder is opened, the status will be changed to this value.
+
+=item reminder_on_resolve
+
+When a reminder is resolved, the status will be changed to this value.
+
 =back
 
 =head2 Transitions between statuses and UI actions
@@ -2183,10 +2251,11 @@ all possible transitions in each lifecycle using the following format:
 
 =head3 Statuses available during ticket creation
 
-By default users can create tickets with any status, except
-deleted. If you want to restrict statuses available during creation
-then describe transition from '' (empty string), like in the example
-above.
+By default users can create tickets with a status of new,
+open, or resolved, but cannot create tickets with a status of
+rejected, stalled, or deleted. If you want to change the statuses
+available during creation, update the transition from '' (empty
+string), like in the example above.
 
 =head3 Protecting status changes with rights
 
@@ -2306,6 +2375,8 @@ Set(%Lifecycles,
             on_merge  => 'resolved',
             approved  => 'open',
             denied    => 'rejected',
+            reminder_on_open     => 'open',
+            reminder_on_resolve  => 'resolved',
         },
 
         transitions => {
@@ -2379,6 +2450,8 @@ Set(%Lifecycles,
         defaults => {
             on_create => 'new',
             on_merge => 'resolved',
+            reminder_on_open     => 'open',
+            reminder_on_resolve  => 'resolved',
         },
 
         transitions => {
@@ -2483,7 +2556,7 @@ Set(%AdminSearchResultFormat,
     Queues =>
         q{'<a href="__WebPath__/Admin/Queues/Modify.html?id=__id__">__id__</a>/TITLE:#'}
         .q{,'<a href="__WebPath__/Admin/Queues/Modify.html?id=__id__">__Name__</a>/TITLE:Name'}
-        .q{,__Description__,__Address__,__Priority__,__DefaultDueIn__,'__Disabled__,__Lifecycle__},
+        .q{,__Description__,__Address__,__Priority__,__DefaultDueIn__,__Disabled__,__Lifecycle__},
 
     Groups =>
         q{'<a href="__WebPath__/Admin/Groups/Modify.html?id=__id__">__id__</a>/TITLE:#'}
@@ -2634,6 +2707,8 @@ Set($LinkTransactionsRun1Scrip, 0);
 
 This option has been deprecated.  You can configure this site-wide
 with L</Lifecycles> (see L</Labeling and defining actions>).
+
+=back
 
 =cut
 

@@ -52,13 +52,15 @@
 #
 
 use strict;
+use warnings;
 no warnings qw(numeric redefine);
 use Getopt::Long;
 my %args;
 my %deps;
+my @orig_argv = @ARGV;
 GetOptions(
     \%args,                               'v|verbose',
-    'install',                            'with-MYSQL',
+    'install!',                           'with-MYSQL',
     'with-POSTGRESQL|with-pg|with-pgsql', 'with-SQLITE',
     'with-ORACLE',                        'with-FASTCGI',
     'with-MODPERL1',                      'with-MODPERL2',
@@ -74,6 +76,7 @@ GetOptions(
     'with-DASHBOARDS',
     'with-USERLOGO',
     'with-SSL-MAILGATE',
+    'with-HTML-DOC',
 
     'download=s',
     'repository=s',
@@ -103,6 +106,7 @@ my %default = (
     'with-DASHBOARDS' => 1,
     'with-USERLOGO' => 1,
     'with-SSL-MAILGATE' => @RT_SSL_MAILGATE@,
+    'with-HTML-DOC' => @RT_DEVEL_MODE@,
 );
 $args{$_} = $default{$_} foreach grep !exists $args{$_}, keys %default;
 
@@ -288,12 +292,12 @@ Test::Builder 0.90 # needed for is_passing
 Test::MockTime
 Log::Dispatch::Perl
 Test::WWW::Mechanize::PSGI
-Plack::Middleware::Test::StashWarnings
+Plack::Middleware::Test::StashWarnings 0.06
 Test::LongString
 .
 
 $deps{'FASTCGI'} = [ text_to_hash( << '.') ];
-FCGI
+FCGI 0.74
 FCGI::ProcManager
 .
 
@@ -337,13 +341,14 @@ Net::SMTP
 .
 
 $deps{'DASHBOARDS'} = [ text_to_hash( << '.') ];
-HTML::RewriteAttributes 0.04
+HTML::RewriteAttributes 0.05
 MIME::Types
+URI 1.59
 .
 
 $deps{'GRAPHVIZ'} = [ text_to_hash( << '.') ];
 GraphViz
-IPC::Run
+IPC::Run 0.90
 .
 
 $deps{'GD'} = [ text_to_hash( << '.') ];
@@ -356,8 +361,14 @@ $deps{'USERLOGO'} = [ text_to_hash( << '.') ];
 Convert::Color
 .
 
+$deps{'HTML-DOC'} = [ text_to_hash( <<'.') ];
+Pod::Simple 3.17
+HTML::Entities
+.
+
 my %AVOID = (
     'DBD::Oracle' => [qw(1.23)],
+    'Email::Address' => [qw(1.893 1.894)],
 );
 
 if ($args{'download'}) {
@@ -402,7 +413,12 @@ foreach my $type (sort grep $args{$_}, keys %args) {
     $Missing_By_Type{$type} = \%missing if keys %missing;
 }
 
-conclude(%Missing_By_Type);
+if ( $args{'install'} && keys %Missing_By_Type ) {
+    exec($0, @orig_argv, '--no-install');
+}
+else {
+    conclude(%Missing_By_Type);
+}
 
 sub test_deps {
     my @deps = @_;
