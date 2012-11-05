@@ -228,6 +228,7 @@ Net::CIDR
 Regexp::Common::net::CIDR
 Regexp::IPv6
 Symbol::Global::Name
+Module::Refresh 0.03
 .
 
 $deps{'MASON'} = [ text_to_hash( << '.') ];
@@ -284,7 +285,6 @@ HTML::Form
 HTML::TokeParser
 WWW::Mechanize 1.52
 Test::WWW::Mechanize 1.30
-Module::Refresh 0.03
 Test::Expect 0.31
 XML::Simple
 File::Find
