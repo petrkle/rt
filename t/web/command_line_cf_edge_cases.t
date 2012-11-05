@@ -80,7 +80,7 @@ for my $name (@invalid) {
     expect_send(
         qq{create -t ticket set subject='test cf $name' 'CF.{$name}=foo'},
         "creating a ticket for cf $name" );
-    expect_like( qr/Unrecognised argument 'CF\.{foo,bar}=foo'/i,
+    expect_like( qr/You shouldn't specify objects as arguments to create/i,
         '$name is not a valid cf name' );
 }
 
