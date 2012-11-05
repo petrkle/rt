@@ -65,7 +65,7 @@ GetOptions(
     'with-MODPERL1',                      'with-MODPERL2',
     'with-STANDALONE',
 
-    'with-DEV',
+    'with-DEVELOPER',
 
     'with-GPG',
     'with-ICAL',
@@ -96,7 +96,7 @@ my %default = (
     'with-CORE' => 1,
     'with-CLI' => 1,
     'with-MAILGATE' => 1, 
-    'with-DEV' => @RT_DEVEL_MODE@, 
+    'with-DEVELOPER' => @RT_DEVELOPER@,
     'with-GPG' => @RT_GPG@,
     'with-ICAL' => 1,
     'with-SMTP' => 1,
@@ -105,7 +105,7 @@ my %default = (
     'with-DASHBOARDS' => 1,
     'with-USERLOGO' => 1,
     'with-SSL-MAILGATE' => @RT_SSL_MAILGATE@,
-    'with-HTML-DOC' => @RT_DEVEL_MODE@,
+    'with-HTML-DOC' => @RT_DEVELOPER@,
 );
 $args{$_} = $default{$_} foreach grep !exists $args{$_}, keys %default;
 
@@ -278,7 +278,7 @@ Term::ReadLine
 Term::ReadKey
 .
 
-$deps{'DEV'} = [ text_to_hash( << '.') ];
+$deps{'DEVELOPER'} = [ text_to_hash( << '.') ];
 Email::Abstract
 Test::Email
 HTML::Form
@@ -675,7 +675,7 @@ list the status of all dependencies, rather than just the missing ones.
 
     libraries needed to support the modperl 2 handler
 
-=item with-dev
+=item with-developer
 
     tools needed for RT development
 
