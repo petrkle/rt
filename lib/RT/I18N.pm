@@ -284,14 +284,69 @@ sub DecodeMIMEWordsToEncoding {
     my $str = shift;
     my $to_charset = _CanonicalizeCharset(shift);
     my $field = shift || '';
+    $RT::Logger->warning(
+        "DecodeMIMEWordsToEncoding was called without field name."
+        ."It's known to cause troubles with decoding fields properly."
+    ) unless $field;
+
+    # XXX TODO: RT doesn't currently do the right thing with mime-encoded headers
+    # We _should_ be preserving them encoded until after parsing is completed and
+    # THEN undo the mime-encoding.
+    #
+    # This routine should be translating the existing mimeencoding to utf8 but leaving
+    # things encoded.
+    #
+    # It's legal for headers to contain mime-encoded commas and semicolons which
+    # should not be treated as address separators. (Encoding == quoting here)
+    #
+    # until this is fixed, we must escape any string containing a comma or semicolon
+    # this is only a bandaid
+
+    # Some _other_ MUAs encode quotes _already_, and double quotes
+    # confuse us a lot, so only quote it if it isn't quoted
+    # already.
 
     # handle filename*=ISO-8859-1''%74%E9%73%74%2E%74%78%74, parameter value
     # continuations, and similar syntax from RFC 2231
-    if ($field =~ /^Content-(Type|Disposition)/i) {
+    if ($field =~ /^Content-/i) {
         # This concatenates continued parameters and normalizes encoded params
         # to QB encoded-words which we handle below
-        $str = MIME::Field::ParamVal->parse($str)->stringify;
+        my $params = MIME::Field::ParamVal->parse_params($str);
+        foreach my $v ( values %$params ) {
+            $v = _DecodeMIMEWordsToEncoding( $v, $to_charset );
+            # drop quotes in case those were hidden inside encoded part
+            $v =~ s/^"(.*)"$/$1/;
+        }
+        $str = bless({}, 'MIME::Field::ParamVal')->set($params)->stringify;
     }
+    elsif ( $field =~ /^(?:To|From|B?Cc)$/i ) {
+        my @addresses = RT::EmailParser->ParseEmailAddress( $str );
+        foreach my $address ( @addresses ) {
+            foreach my $field (qw(phrase comment)) {
+                my $v = $address->$field() or next;
+                $v = _DecodeMIMEWordsToEncoding( $v, $to_charset );
+                # drop quotes in case those were hidden inside encoded part
+                $v =~ s/^"(.*)"$/$1/;
+                $address->$field($v);
+            }
+        }
+        $str = join ', ', map $_->format, @addresses;
+    }
+    else {
+        $str = _DecodeMIMEWordsToEncoding( $str, $to_charset );
+    }
+
+
+    # We might have \n without trailing whitespace, which will result in
+    # invalid headers.
+    $str =~ s/\n//g;
+
+    return ($str)
+}
+
+sub _DecodeMIMEWordsToEncoding {
+    my $str = shift;
+    my $to_charset = shift;
 
     # XXX TODO: use decode('MIME-Header', ...) and Encode::Alias to replace our
     # custom MIME word decoding and charset canonicalization.  We can't do this
@@ -307,70 +362,42 @@ sub DecodeMIMEWordsToEncoding {
                          \?=            # ?=
                          ([^=]*)        # trailing
                         /xgcs;
+    return $str unless @list;
 
-    if ( @list ) {
-        # add everything that hasn't matched to the end of the latest
-        # string in array this happen when we have 'key="=?encoded?="; key="plain"'
-        $list[-1] .= substr($str, pos $str);
+    # add everything that hasn't matched to the end of the latest
+    # string in array this happen when we have 'key="=?encoded?="; key="plain"'
+    $list[-1] .= substr($str, pos $str);
 
-        $str = "";
-        while (@list) {
-            my ($prefix, $charset, $encoding, $enc_str, $trailing) =
-                    splice @list, 0, 5;
-            $charset  = _CanonicalizeCharset($charset);
-            $encoding = lc $encoding;
+    $str = '';
+    while (@list) {
+        my ($prefix, $charset, $encoding, $enc_str, $trailing) =
+                splice @list, 0, 5;
+        $charset  = _CanonicalizeCharset($charset);
+        $encoding = lc $encoding;
 
-            $trailing =~ s/\s?\t?$//;               # Observed from Outlook Express
+        $trailing =~ s/\s?\t?$//;               # Observed from Outlook Express
 
-            if ( $encoding eq 'q' ) {
-                use MIME::QuotedPrint;
-                $enc_str =~ tr/_/ /;		# Observed from Outlook Express
-                $enc_str = decode_qp($enc_str);
-            } elsif ( $encoding eq 'b' ) {
-                use MIME::Base64;
-                $enc_str = decode_base64($enc_str);
-            } else {
-                $RT::Logger->warning("Incorrect encoding '$encoding' in '$str', "
-                    ."only Q(uoted-printable) and B(ase64) are supported");
-            }
-
-            # now we have got a decoded subject, try to convert into the encoding
-            unless ( $charset eq $to_charset ) {
-                Encode::from_to( $enc_str, $charset, $to_charset );
-            }
-
-            # XXX TODO: RT doesn't currently do the right thing with mime-encoded headers
-            # We _should_ be preserving them encoded until after parsing is completed and
-            # THEN undo the mime-encoding.
-            #
-            # This routine should be translating the existing mimeencoding to utf8 but leaving
-            # things encoded.
-            #
-            # It's legal for headers to contain mime-encoded commas and semicolons which
-            # should not be treated as address separators. (Encoding == quoting here)
-            #
-            # until this is fixed, we must escape any string containing a comma or semicolon
-            # this is only a bandaid
-
-            # Some _other_ MUAs encode quotes _already_, and double quotes
-            # confuse us a lot, so only quote it if it isn't quoted
-            # already.
-            $enc_str = qq{"$enc_str"}
-                if $enc_str =~ /[()<>\[\]:;@\\,.]/
-                and not (($enc_str =~ /^"/ or $prefix =~ /"$/) and ($enc_str =~ /"$/ or $trailing =~ /^"/))
-                and (!$field || $field =~ /^(?:To$|From$|B?Cc$|Content-)/i);
-
-            $str .= $prefix . $enc_str . $trailing;
+        if ( $encoding eq 'q' ) {
+            use MIME::QuotedPrint;
+            $enc_str =~ tr/_/ /;		# Observed from Outlook Express
+            $enc_str = decode_qp($enc_str);
+        } elsif ( $encoding eq 'b' ) {
+            use MIME::Base64;
+            $enc_str = decode_base64($enc_str);
+        } else {
+            $RT::Logger->warning("Incorrect encoding '$encoding' in '$str', "
+                ."only Q(uoted-printable) and B(ase64) are supported");
         }
-    }
 
-    # We might have \n without trailing whitespace, which will result in
-    # invalid headers.
-    $str =~ s/\n//g;
+        # now we have got a decoded subject, try to convert into the encoding
+        unless ( $charset eq $to_charset ) {
+            Encode::from_to( $enc_str, $charset, $to_charset );
+        }
+        $str .= $prefix . $enc_str . $trailing;
+    }
 
     return ($str)
 }
-
 
 
 =head2 _FindOrGuessCharset MIME::Entity, $head_only
