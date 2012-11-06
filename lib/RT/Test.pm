@@ -58,6 +58,7 @@ use Socket;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use File::Spec;
+use Scalar::Util qw(blessed);
 
 our @EXPORT = qw(is_empty diag parse_mail works fails);
 
@@ -1099,7 +1100,7 @@ sub clean_caught_mails {
 
 =head2 object_scrips_are
 
-Takes an L<RT::Scrip> object as the first argument and an arrayref of
+Takes an L<RT::Scrip> object or ID as the first argument and an arrayref of
 L<RT::Queue> objects and/or Queue IDs as the second argument.
 
 The scrip's applications (L<RT::ObjectScrip> records) are tested to ensure they
@@ -1118,18 +1119,26 @@ sub object_scrips_are {
     my $to      = shift || [];
     my $not_to  = shift;
 
-    Test::More::ok($scrip->IsAdded(ref $_? $_->id : $_), 'added to queue' ) foreach @$to;
+    unless (blessed($scrip)) {
+        my $id = $scrip;
+        $scrip = RT::Scrip->new( RT->SystemUser );
+        $scrip->Load($id);
+    }
+
+    $to = [ map { blessed($_) ? $_->id : $_ } @$to ];
+    Test::More::ok($scrip->IsAdded($_), "added to queue $_" ) foreach @$to;
     Test::More::is_deeply(
         [sort map $_->id, @{ $scrip->AddedTo->ItemsArrayRef }],
-        [sort grep $_, map ref $_? $_->id : $_, @$to],
+        [sort grep $_, @$to ],
         'correct list of added to queues',
     );
 
     if ($not_to) {
-        Test::More::ok(!$scrip->IsAdded(ref $_? $_->id : $_), 'not added to queue' ) foreach @$not_to;
+        $not_to = [ map { blessed($_) ? $_->id : $_ } @$not_to ];
+        Test::More::ok(!$scrip->IsAdded($_), "not added to queue $_" ) foreach @$not_to;
         Test::More::is_deeply(
             [sort map $_->id, @{ $scrip->NotAddedTo->ItemsArrayRef }],
-            [sort grep $_, map ref $_? $_->id : $_, @$not_to],
+            [sort grep $_, @$not_to ],
             'correct list of not added to queues',
         );
     }
