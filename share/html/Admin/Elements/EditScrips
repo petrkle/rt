@@ -88,9 +88,7 @@
 <p><i><&|/l&>(No scrips)</&></i></p>
 % }
 
-<div style="text-align:right">
-<% loc('Select stage for scrips you add') %>: <& SelectStage &>
-</div>
+<& SelectStageForAdded &>
 
 <& /Elements/Submit,
     Name => 'AddScrips',

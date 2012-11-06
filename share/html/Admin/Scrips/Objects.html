@@ -59,9 +59,6 @@
 <&|/l&>check this box to remove this scrip from all objects and be able to choose specific objects.</&>
 </label>
 % } else {
-<h2><% loc('Stage') %></h2>
-<& /Admin/Elements/SelectStage, Default => $Stage &>
-
 <h2><&|/l&>Apply globally</&></h2>
 
 <label>
@@ -103,6 +100,8 @@
 &>
 
 % }
+
+<& /Admin/Elements/SelectStageForAdded, Default => $Stage &>
 
 <& /Elements/Submit, Name => 'Update' &>
 </form>
