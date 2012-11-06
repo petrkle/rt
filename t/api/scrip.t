@@ -138,11 +138,11 @@ note 'check applications vs. templates';
         CustomCommitCode        => "1;",
     );
     ok($status, 'created a scrip') or diag "error: $msg";
-    main->check_applications($scrip, [$queue], [0, $queue_B]);
+    RT::Test->object_scrips_are($scrip, [$queue], [0, $queue_B]);
 
     ($status, $msg) = $scrip->AddToObject( $queue_B->id );
     ok(!$status, $msg);
-    main->check_applications($scrip, [$queue], [0, $queue_B]);
+    RT::Test->object_scrips_are($scrip, [$queue], [0, $queue_B]);
 
     $template = RT::Template->new( RT->SystemUser );
     ($status, $msg) = $template->Create( Queue => $queue_B->id, Name => 'foo' );
@@ -150,7 +150,7 @@ note 'check applications vs. templates';
 
     ($status, $msg) = $scrip->AddToObject( $queue_B->id );
     ok($status, 'added scrip to another queue');
-    main->check_applications($scrip, [$queue, $queue_B], [0]);
+    RT::Test->object_scrips_are($scrip, [$queue, $queue_B], [0]);
 
     ($status, $msg) = $scrip->RemoveFromObject( $queue_B->id );
     ok($status, 'removed scrip from queue');
@@ -160,14 +160,14 @@ note 'check applications vs. templates';
 
     ($status, $msg) = $scrip->AddToObject( $queue_B->id );
     ok(!$status, $msg);
-    main->check_applications($scrip, [$queue], [0, $queue_B]);
+    RT::Test->object_scrips_are($scrip, [$queue], [0, $queue_B]);
 
     ($status, $msg) = $template->Create( Queue => 0, Name => 'foo' );
     ok $status, 'created a global template';
 
     ($status, $msg) = $scrip->AddToObject( $queue_B->id );
     ok($status, 'added scrip');
-    main->check_applications($scrip, [$queue, $queue_B], [0]);
+    RT::Test->object_scrips_are($scrip, [$queue, $queue_B], [0]);
 }
 
 note 'basic check for disabling scrips';
@@ -212,25 +212,3 @@ note 'basic check for disabling scrips';
 
     ok(!$scrip->Disabled, "not applied");
 }
-
-sub check_applications {
-    local $Test::Builder::Level = $Test::Builder::Level + 1;
-    my $self = shift;
-    my $scrip = shift;
-    my $to = shift || [];
-    my $not_to = shift || [];
-
-    ok($scrip->IsAdded(ref $_? $_->id : $_), 'added to queue' ) foreach @$to;
-    ok(!$scrip->IsAdded(ref $_? $_->id : $_), 'not added' ) foreach @$not_to;
-    is_deeply(
-        [sort map $_->id, @{ $scrip->AddedTo->ItemsArrayRef }],
-        [sort grep $_, map ref $_? $_->id : $_, @$to],
-        'correct list of queues',
-    );
-    is_deeply(
-        [sort map $_->id, @{ $scrip->NotAddedTo->ItemsArrayRef }],
-        [sort grep $_, map ref $_? $_->id : $_, @$not_to],
-        'correct list of queues',
-    );
-}
-
