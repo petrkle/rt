@@ -65,7 +65,6 @@ sub TargetField {
 sub Create {
     my $self = shift;
     my %args = (
-        Scrip       => 0,
         ObjectId    => 0,
         SortOrder   => undef,
         @_
@@ -113,6 +112,30 @@ sub Delete {
     }
 
     $self->SUPER::Delete;
+}
+
+sub SetDisabledOnAll {
+    my $self = shift;
+    my %args = (@_);
+
+    my $field = $self->TargetField;
+
+    my $id = $args{ $field };
+    $id = $id->id if ref $id;
+    $id ||= $self->TargetObj->id;
+
+    my $list = $self->CollectionClass->new( $self->CurrentUser );
+    $list->Limit( FIELD => $field, VALUE => $id );
+    $RT::Handle->BeginTransaction;
+    foreach ( @{ $list->ItemsArrayRef } ) {
+        my ($status, $msg) = $_->SetDisabled( $args{Value} || 0 );
+        unless ( $status ) {
+            $RT::Handle->Rollback;
+            return ($status, $msg);
+        }
+    }
+    $RT::Handle->Commit;
+    return (1, $self->loc("Disabled all applications") );
 }
 
 =head2 Sorting scrips applications
